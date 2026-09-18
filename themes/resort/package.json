@@ -1,0 +1,6 @@
+{
+  "name": "theme-resort",
+  "private": true,
+  "scripts": { "build:css": "tailwindcss -i ./src/input.css -o ./css/style.css --minify" },
+  "devDependencies": { "tailwindcss": "^3.4.0" }
+}

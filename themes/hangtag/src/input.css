@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --accent: #D9A441;
+    --accent2: #B23A2E;
+  }
+
+  body {
+    @apply bg-ink text-paper font-body;
+  }
+}
+
+@layer components {
+  .tag-card {
+    @apply relative bg-surface border border-surface2 rounded-sm overflow-hidden flex flex-col;
+  }
+
+  .tag-hole {
+    @apply absolute top-3 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-ink border border-surface2 z-10;
+  }
+
+  .tag-perf {
+    @apply relative border-t border-dashed border-surface2;
+  }
+
+  .tag-perf::before,
+  .tag-perf::after {
+    content: "";
+    @apply absolute w-3 h-3 rounded-full bg-ink -top-1.5;
+  }
+  .tag-perf::before { left: -6px; }
+  .tag-perf::after { right: -6px; }
+
+  .receipt {
+    @apply font-mono text-sm;
+  }
+
+  .receipt-edge {
+    height: 10px;
+    background-image: radial-gradient(circle at 8px 0, transparent 6px, #1E1B17 7px);
+    background-size: 16px 10px;
+    background-repeat: repeat-x;
+  }
+}

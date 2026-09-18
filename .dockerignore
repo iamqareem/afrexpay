@@ -1,0 +1,10 @@
+# Keep the image lean and secret-free.
+node_modules/
+themes/*/node_modules/
+data/
+postgres-data/
+.env
+.git/
+.github/
+*.log
+npm-debug.log*

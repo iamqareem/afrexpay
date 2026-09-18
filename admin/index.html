@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Store Admin</title>
+  <script>
+    try {
+      var t = localStorage.getItem('afrexpay-theme');
+      if (!t) { t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'; }
+      document.documentElement.dataset.theme = t;
+    } catch (e) { document.documentElement.dataset.theme = 'light'; }
+  </script>
+  <link rel="stylesheet" href="/admin/css/style.css" />
+  <script defer src="/admin/js/modules/theme-picker.js"></script>
+
+  <script defer src="/admin/js/app.js"></script>
+
+  <script defer src="/admin/js/alpine.min.js"></script>
+
+</head>
+<body>
+  <div x-data="adminApp()" x-cloak>
+
+    <!-- LOGIN -->
+    <div class="center-screen" x-show="checkedSession && !loggedIn">
+      <div class="card auth-card">
+        <h2>Store Admin</h2>
+        <template x-if="!showForgotPassword">
+          <div>
+            <form @submit.prevent="login">
+              <div class="field">
+                <label for="login-email">Email</label>
+                <input type="email" id="login-email" x-model="loginEmail" autocomplete="email" required />
+              </div>
+              <div class="field">
+                <label for="login-password">Password</label>
+                <div class="password-input-group">
+                  <input :type="showLoginPassword ? 'text' : 'password'" id="login-password" x-model="loginPassword" autocomplete="current-password" required />
+                  <button type="button" class="toggle-password-btn" @click="toggleLoginPassword()" title="Toggle password visibility" aria-label="Show or hide password">
+                    <svg class="eye-icon" x-show="!showLoginPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    <svg class="eye-icon" x-show="showLoginPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                  </button>
+                </div>
+              </div>
+              <p class="error-text" x-show="loginError" x-text="loginError"></p>
+              <button type="submit" class="btn full-width">LOG IN</button>
+            </form>
+            <button class="btn ghost full-width mt-md" @click="showForgotPassword = true">Forgot password?</button>
+          </div>
+        </template>
+        <template x-if="showForgotPassword">
+          <div>
+            <p class="muted">Enter your email and we'll send a reset link.</p>
+            <div class="field">
+              <label for="forgot-email">Email</label>
+              <input type="email" id="forgot-email" x-model="forgotEmail" autocomplete="email" />
+            </div>
+            <p x-show="forgotMessage" x-text="forgotMessage" class="hint" style="margin-bottom:0.75rem;"></p>
+            <button class="btn full-width" @click="requestPasswordReset" :disabled="forgotSending" x-text="forgotSending ? 'Sending...' : 'Send reset link'"></button>
+            <button class="btn ghost full-width mt-md" @click="showForgotPassword = false; forgotMessage = ''">Back to login</button>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div x-show="checkedSession && loggedIn">
+      <div class="topbar">
+        <strong x-text="config.storeName ? config.storeName + ' ' + (config.storeNameAccent || '') : 'Store Admin'"></strong>
+        <div class="topbar-actions">
+          <button class="theme-toggle" id="theme-toggle" aria-pressed="false" aria-label="Switch to dark mode">
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          </button>
+          <button class="btn ghost" @click="logout">Log out</button>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Dashboard sections" @keydown="tabKey($event)">
+        <button type="button" class="tab" role="tab" data-tab="config" :aria-selected="tab === 'config'" :class="{active: tab === 'config'}" @click="setTab('config')">Store Settings</button>
+        <button type="button" class="tab" role="tab" data-tab="payments" :aria-selected="tab === 'payments'" :class="{active: tab === 'payments'}" @click="setTab('payments')">Payments</button>
+        <button type="button" class="tab" role="tab" data-tab="domain" :aria-selected="tab === 'domain'" :class="{active: tab === 'domain'}" @click="setTab('domain')">Custom Domain</button>
+        <button type="button" class="tab" role="tab" data-tab="products" :aria-selected="tab === 'products'" :class="{active: tab === 'products'}" @click="setTab('products')" x-show="tabVisible('products')">Products</button>
+        <button type="button" class="tab" role="tab" data-tab="services" :aria-selected="tab === 'services'" :class="{active: tab === 'services'}" @click="setTab('services')" x-show="tabVisible('services')">Services</button>
+        <button type="button" class="tab" role="tab" data-tab="availability" :aria-selected="tab === 'availability'" :class="{active: tab === 'availability'}" @click="setTab('availability')" x-show="tabVisible('availability')">Availability</button>
+        <button type="button" class="tab" role="tab" data-tab="orders" :aria-selected="tab === 'orders'" :class="{active: tab === 'orders'}" @click="setTab('orders')" x-show="tabVisible('orders')">Orders</button>
+        <button type="button" class="tab" role="tab" data-tab="bookings" :aria-selected="tab === 'bookings'" :class="{active: tab === 'bookings'}" @click="setTab('bookings')" x-show="tabVisible('bookings')">Bookings</button>
+        <button type="button" class="tab" role="tab" data-tab="listings" :aria-selected="tab === 'listings'" :class="{active: tab === 'listings'}" @click="setTab('listings')" x-show="tabVisible('listings')">Listings</button>
+        <button type="button" class="tab" role="tab" data-tab="inquiries" :aria-selected="tab === 'inquiries'" :class="{active: tab === 'inquiries'}" @click="setTab('inquiries')" x-show="tabVisible('inquiries')">Inquiries</button>
+        <button type="button" class="tab" role="tab" data-tab="reservations" :aria-selected="tab === 'reservations'" :class="{active: tab === 'reservations'}" @click="setTab('reservations')" x-show="tabVisible('reservations')">Reservations</button>
+      </div>
+
+      <div class="main">
+
+        <!-- STORE SETTINGS -->
+        <div x-show="tab === 'config'">
+          <div class="card">
+            <div class="field">
+              <label>What does your store sell?</label>
+              <div class="cluster">
+                <template x-for="(v, key) in verticals" :key="key">
+                  <button type="button" class="btn" :class="{ghost: config.vertical !== key}" @click="setVertical(key)" x-text="v.label"></button>
+                </template>
+              </div>
+              <p class="hint">Changes which tabs and storefront layout you get — product catalog vs. a booking calendar.</p>
+            </div>
+            <div class="field-grid">
+              <div class="field"><label>Store name</label><input x-model="config.storeName" /></div>
+              <div class="field"><label>Store name (accent word)</label><input x-model="config.storeNameAccent" /></div>
+            </div>
+            <div class="field"><label>Tagline</label><input x-model="config.tagline" /></div>
+            <div class="field-grid">
+              <div class="field"><label>Hero line 1</label><input x-model="config.heroTitleLine1" /></div>
+              <div class="field"><label>Hero line 2</label><input x-model="config.heroTitleLine2" /></div>
+            </div>
+            <div class="field"><label>Hero subtitle</label><textarea rows="2" x-model="config.heroSubtitle"></textarea></div>
+            <div class="field"><label>Footer text</label><input x-model="config.footerText" /></div>
+            <div class="field-grid">
+              <div class="field"><label>Phone</label><input x-model="config.phone" /></div>
+              <div class="field">
+                <label>Currency</label>
+                <select x-model="config.currency">
+                  <option value="UGX">UGX</option>
+                  <option value="KES">KES</option>
+                  <option value="TZS">TZS</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label>Colors</label>
+              <div class="cluster">
+                <template x-for="pair in colorPairs" :key="pair.name">
+                  <button type="button" @click="config.accentColor = pair.accent; config.accentColor2 = pair.accent2" :title="pair.name"
+                    :style="'width:36px;height:36px;border-radius:6px;border:2px solid ' + (config.accentColor === pair.accent ? 'var(--text)' : 'transparent') + '; background: linear-gradient(135deg, ' + pair.accent + ' 50%, ' + pair.accent2 + ' 50%); cursor:pointer;'">
+                  </button>
+                </template>
+              </div>
+              <p class="hint">Curated pairs, chosen for contrast against a dark storefront.</p>
+            </div>
+            <div class="field">
+              <label>Storefront Theme</label>
+              <p class="hint">Themes tailored for your selected business category (<strong x-text="verticals[config.vertical || 'products']?.label"></strong>).</p>
+              <div class="theme-grid">
+                <template x-for="t in filteredThemes()" :key="t.id">
+                  <div class="theme-card" :class="{ active: t.id === currentTheme }" @click="setTheme(t.id)">
+                    <div class="theme-card-header">
+                      <strong class="theme-card-title" x-text="t.label"></strong>
+                      <span class="theme-badge" x-text="t.subCategory"></span>
+                    </div>
+                    <p class="theme-card-desc" x-text="t.description"></p>
+                    <div class="theme-card-footer">
+                      <span class="theme-select-btn" x-text="t.id === currentTheme ? '✓ ACTIVE THEME' : 'SELECT THEME'"></span>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+            <div class="field">
+              <label>Order notifications</label>
+              <template x-if="config.matrixRoomId">
+                <div>
+                  <p class="success-text">✓ Connected — orders will be messaged to you instantly.</p>
+                  <button class="btn ghost" type="button" @click="config._reconnecting = true" x-show="!config._reconnecting">Connect a different account</button>
+                </div>
+              </template>
+              <div x-show="!config.matrixRoomId || config._reconnecting">
+                <p class="hint" style="margin-top:0;">
+                  Install <a href="https://element.io" target="_blank" rel="noopener">Element</a> (free), create an account,
+                  and enter your Matrix ID below — we'll invite you to a private room and message you the moment an order lands.
+                </p>
+                <div class="cluster">
+                  <input x-model="matrixUserId" placeholder="@yourname:matrix.org" class="flex-1" aria-label="Your Matrix ID" />
+                  <button class="btn" type="button" @click="connectMatrix" :disabled="matrixConnecting" x-text="matrixConnecting ? 'Connecting...' : 'Connect'"></button>
+                  <button class="btn ghost" type="button" @click="cancelMatrixReconnect()" x-show="config._reconnecting">Cancel</button>
+                </div>
+                <p class="error-text" x-show="matrixError" x-text="matrixError"></p>
+              </div>
+            </div>
+            <button class="btn" @click="saveConfig" :disabled="configSaving" x-text="configSaving ? 'Saving...' : 'Save settings'"></button>
+          </div>
+        </div>
+
+        <!-- PRODUCTS -->
+        <div x-show="tab === 'products'">
+          <div class="card">
+            <h3 x-text="editingProductId ? 'Edit product' : 'Add a product'"></h3>
+            <div class="field-grid">
+              <div class="field"><label>SKU</label><input x-model="productForm.sku" :disabled="editingProductId" /></div>
+              <div class="field"><label>Name</label><input x-model="productForm.name" /></div>
+            </div>
+            <div class="field-grid">
+              <div class="field"><label>Category</label><input x-model="productForm.category" /></div>
+              <div class="field"><label>Price (whole units, e.g. 45000)</label><input type="number" x-model="productForm.priceMinor" /></div>
+            </div>
+            <div class="field-grid">
+              <div class="field"><label>Sizes (comma separated)</label><input x-model="productForm.sizes" placeholder="S, M, L, XL" /></div>
+              <div class="field"><label>Stock (leave blank = untracked)</label><input type="number" x-model="productForm.stockQty" /></div>
+            </div>
+            <div class="field"><label>Description</label><textarea rows="2" x-model="productForm.blurb"></textarea></div>
+            <p class="error-text" x-show="productError" x-text="productError"></p>
+            <button class="btn" @click="submitProduct" x-text="editingProductId ? 'Save changes' : 'Add product'"></button>
+            <button class="btn ghost ml-sm" @click="resetProductForm" x-show="editingProductId">Cancel</button>
+          </div>
+
+          <!-- photo manager — only shown once a product exists to attach photos to -->
+          <div class="card" x-show="editingProductId">
+            <h3>Photos</h3>
+            <input type="file" accept="image/jpeg,image/png,image/webp" @change="uploadProductPhoto($event, editingProductId)" class="mb-md" />
+            <div class="photo-grid">
+              <template x-for="(photo, idx) in productPhotos" :key="photo.id">
+                <div class="photo-thumb">
+                  <img :src="'/media/' + photo.storage_path">
+                  <div class="photo-actions">
+                    <button type="button" class="row-actions" @click="moveProductPhoto(idx, -1)" :disabled="idx === 0">&uarr;</button>
+                    <button type="button" class="row-actions" @click="moveProductPhoto(idx, 1)" :disabled="idx === productPhotos.length - 1">&darr;</button>
+                    <button type="button" class="row-actions danger" @click="deleteProductPhoto(photo.id)">&times;</button>
+                  </div>
+                </div>
+              </template>
+            </div>
+            <p class="hint" x-show="productPhotos.length === 0">No photos yet — add one above.</p>
+          </div>
+
+          <div class="card">
+            <div class="toolbar" x-show="!loading.products && (products.length || filterActive('products'))">
+              <input x-model="filters.products.q" placeholder="Search SKU, name, category…" aria-label="Search products" />
+              <select x-model="filters.products.sort" aria-label="Sort products">
+                <option value="new">Newest first</option>
+                <option value="name">Name A–Z</option>
+                <option value="price-asc">Price: low to high</option>
+                <option value="price-desc">Price: high to low</option>
+              </select>
+            </div>
+            <table>
+              <thead>
+                <tr><th scope="col">SKU</th><th scope="col">Name</th><th scope="col">Price</th><th scope="col">Stock</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr>
+              </thead>
+              <tbody x-show="loading.products">
+                <tr class="skel-row"><td><span class="skel" style="width:60%"></span></td><td><span class="skel" style="width:85%"></span></td><td><span class="skel" style="width:50%"></span></td><td><span class="skel" style="width:40%"></span></td><td></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:55%"></span></td><td><span class="skel" style="width:75%"></span></td><td><span class="skel" style="width:45%"></span></td><td><span class="skel" style="width:35%"></span></td><td></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:65%"></span></td><td><span class="skel" style="width:80%"></span></td><td><span class="skel" style="width:55%"></span></td><td><span class="skel" style="width:45%"></span></td><td></td></tr>
+              </tbody>
+              <tbody x-show="!loading.products">
+                <template x-for="p in filteredProducts()" :key="p.id">
+                  <tr>
+                    <td data-label="SKU" x-text="p.sku"></td>
+                    <td data-label="Name" x-text="p.name"></td>
+                    <td data-label="Price" x-text="money(p.price_minor, p.currency)"></td>
+                    <td data-label="Stock" x-text="p.stock_qty === null ? '—' : p.stock_qty"></td>
+                    <td class="row-actions">
+                      <button @click="editProduct(p)">Edit</button>
+                      <button class="danger" @click="deleteProduct(p.id)">Remove</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <p class="empty-state" x-show="!loading.products && filteredProducts().length === 0" x-text="filterActive('products') ? 'Nothing matches — clear the search to see everything.' : 'No products yet — add your first one above and it goes live instantly.'"></p>
+          </div>
+        </div>
+
+        <!-- ORDERS -->
+        <div x-show="tab === 'orders'">
+          <div class="card">
+            <div class="toolbar" x-show="!loading.orders && (orders.length || filterActive('orders'))">
+              <input x-model="filters.orders.q" placeholder="Search customer or phone…" aria-label="Search orders" />
+              <select x-model="filters.orders.status" aria-label="Filter orders by status">
+                <option value="">All statuses</option>
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              <select x-model="filters.orders.pay" aria-label="Filter orders by payment">
+                <option value="">Any payment</option>
+                <option value="paid">Paid</option>
+                <option value="unpaid">Unpaid</option>
+                <option value="failed">Failed</option>
+                <option value="refunded">Refunded</option>
+              </select>
+              <select x-model="filters.orders.sort" aria-label="Sort orders">
+                <option value="new">Newest first</option>
+                <option value="old">Oldest first</option>
+              </select>
+            </div>
+            <table>
+              <thead>
+                <tr><th scope="col">Date</th><th scope="col">Customer</th><th scope="col">Phone</th><th scope="col">Total</th><th scope="col">Status</th><th scope="col">Payment</th></tr>
+              </thead>
+              <tbody x-show="loading.orders">
+                <tr class="skel-row"><td><span class="skel" style="width:60%"></span></td><td><span class="skel" style="width:80%"></span></td><td><span class="skel" style="width:70%"></span></td><td><span class="skel" style="width:50%"></span></td><td><span class="skel" style="width:55%"></span></td><td><span class="skel" style="width:55%"></span></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:55%"></span></td><td><span class="skel" style="width:75%"></span></td><td><span class="skel" style="width:65%"></span></td><td><span class="skel" style="width:45%"></span></td><td><span class="skel" style="width:50%"></span></td><td><span class="skel" style="width:50%"></span></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:65%"></span></td><td><span class="skel" style="width:85%"></span></td><td><span class="skel" style="width:70%"></span></td><td><span class="skel" style="width:55%"></span></td><td><span class="skel" style="width:60%"></span></td><td><span class="skel" style="width:60%"></span></td></tr>
+              </tbody>
+              <tbody x-show="!loading.orders">
+                <template x-for="o in filteredOrders()" :key="o.id">
+                  <tr>
+                    <td data-label="Date" x-text="new Date(o.created_at).toLocaleDateString()"></td>
+                    <td data-label="Customer" x-text="o.customer_name"></td>
+                    <td data-label="Phone" x-text="o.phone"></td>
+                    <td data-label="Total" x-text="money(o.total_minor, o.currency)"></td>
+                    <td data-label="Status">
+                      <select :value="o.status" @change="updateOrderStatus(o.id, $event.target.value)" :aria-label="'Status for order by ' + o.customer_name">
+                        <option value="pending">Pending</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="fulfilled">Fulfilled</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </td>
+                    <td data-label="Payment"><span class="badge" :class="o.payment_status" x-text="o.payment_status || 'unpaid'"></span></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <p class="empty-state" x-show="!loading.orders && filteredOrders().length === 0" x-text="filterActive('orders') ? 'No orders match — clear the filters to see everything.' : 'No orders yet — share your store link to make your first sale.'"></p>
+          </div>
+        </div>
+
+        <!-- SERVICES -->
+        <div x-show="tab === 'services'">
+          <div class="card">
+            <h3 x-text="editingServiceId ? 'Edit service' : 'Add a service'"></h3>
+            <div class="field-grid">
+              <div class="field"><label>Name</label><input x-model="serviceForm.name" /></div>
+              <div class="field"><label>Duration (minutes)</label><input type="number" x-model="serviceForm.durationMinutes" /></div>
+            </div>
+            <div class="field-grid">
+              <div class="field"><label>Price (whole units)</label><input type="number" x-model="serviceForm.priceMinor" /></div>
+              <div class="field"><label>Description</label><input x-model="serviceForm.description" /></div>
+            </div>
+            <p class="error-text" x-show="serviceError" x-text="serviceError"></p>
+            <button class="btn" @click="submitService" x-text="editingServiceId ? 'Save changes' : 'Add service'"></button>
+            <button class="btn ghost ml-sm" @click="resetServiceForm" x-show="editingServiceId">Cancel</button>
+          </div>
+
+          <!-- photo manager — only shown once a service exists to attach photos to -->
+          <div class="card" x-show="editingServiceId">
+            <h3>Photos</h3>
+            <input type="file" accept="image/jpeg,image/png,image/webp" @change="uploadServicePhoto($event, editingServiceId)" class="mb-md" />
+            <div class="photo-grid">
+              <template x-for="(photo, idx) in servicePhotos" :key="photo.id">
+                <div class="photo-thumb">
+                  <img :src="'/media/' + photo.storage_path">
+                  <div class="photo-actions">
+                    <button type="button" class="row-actions" @click="moveServicePhoto(idx, -1)" :disabled="idx === 0">&uarr;</button>
+                    <button type="button" class="row-actions" @click="moveServicePhoto(idx, 1)" :disabled="idx === servicePhotos.length - 1">&darr;</button>
+                    <button type="button" class="row-actions danger" @click="deleteServicePhoto(photo.id)">&times;</button>
+                  </div>
+                </div>
+              </template>
+            </div>
+            <p class="hint" x-show="servicePhotos.length === 0">No photos yet — add one above.</p>
+          </div>
+
+          <div class="card">
+            <div class="toolbar" x-show="!loading.services && (services.length || filterActive('services'))">
+              <input x-model="filters.services.q" placeholder="Search services…" aria-label="Search services" />
+              <select x-model="filters.services.sort" aria-label="Sort services">
+                <option value="new">Newest first</option>
+                <option value="name">Name A–Z</option>
+                <option value="price-asc">Price: low to high</option>
+                <option value="price-desc">Price: high to low</option>
+              </select>
+            </div>
+            <table>
+              <thead><tr><th scope="col">Name</th><th scope="col">Duration</th><th scope="col">Price</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+              <tbody x-show="loading.services">
+                <tr class="skel-row"><td><span class="skel" style="width:75%"></span></td><td><span class="skel" style="width:45%"></span></td><td><span class="skel" style="width:55%"></span></td><td></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:70%"></span></td><td><span class="skel" style="width:40%"></span></td><td><span class="skel" style="width:50%"></span></td><td></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:80%"></span></td><td><span class="skel" style="width:50%"></span></td><td><span class="skel" style="width:60%"></span></td><td></td></tr>
+              </tbody>
+              <tbody x-show="!loading.services">
+                <template x-for="s in filteredServices()" :key="s.id">
+                  <tr>
+                    <td data-label="Name" x-text="s.name"></td>
+                    <td data-label="Duration" x-text="s.duration_minutes + ' min'"></td>
+                    <td data-label="Price" x-text="money(s.price_minor, s.currency)"></td>
+                    <td class="row-actions">
+                      <button @click="editService(s)">Edit</button>
+                      <button class="danger" @click="deleteService(s.id)">Remove</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <p class="empty-state" x-show="!loading.services && filteredServices().length === 0" x-text="filterActive('services') ? 'Nothing matches — clear the search to see everything.' : 'No services yet — add what customers can book.'"></p>
+          </div>
+        </div>
+
+        <!-- AVAILABILITY -->
+        <div x-show="tab === 'availability'">
+          <div class="card">
+            <h3>Weekly hours</h3>
+            <p class="muted">Set your working hours for each day. Leave a day blank to stay closed that day.</p>
+            <template x-for="(day, idx) in weekDays" :key="idx">
+              <div class="field-grid align-end">
+                <div class="field"><label x-text="day"></label>
+                  <input type="time" x-model="weeklyHours[idx].startTime" />
+                </div>
+                <div class="field"><label>&nbsp;</label>
+                  <input type="time" x-model="weeklyHours[idx].endTime" />
+                </div>
+              </div>
+            </template>
+            <button class="btn" @click="saveWeeklyHours" :disabled="hoursSaving" x-text="hoursSaving ? 'Saving...' : 'Save hours'"></button>
+          </div>
+          <div class="card">
+            <h3>Add a one-off exception</h3>
+            <p class="muted">Block off a specific date (holiday, day off), or open extra hours on a day you're normally closed.</p>
+            <div class="field-grid">
+              <div class="field"><label>Date</label><input type="date" x-model="exceptionForm.date" /></div>
+              <div class="field"><label>Available that day?</label>
+                <select x-model="exceptionForm.isAvailable">
+                  <option :value="false">No — blocked</option>
+                  <option :value="true">Yes — open (set hours below)</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-grid" x-show="exceptionForm.isAvailable">
+              <div class="field"><label>Start</label><input type="time" x-model="exceptionForm.startTime" /></div>
+              <div class="field"><label>End</label><input type="time" x-model="exceptionForm.endTime" /></div>
+            </div>
+            <button class="btn" @click="addException">Add exception</button>
+          </div>
+          <div class="card">
+            <table>
+              <thead><tr><th scope="col">Date</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+              <tbody x-show="loading.exceptions">
+                <tr class="skel-row"><td><span class="skel" style="width:55%"></span></td><td><span class="skel" style="width:45%"></span></td><td></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:60%"></span></td><td><span class="skel" style="width:50%"></span></td><td></td></tr>
+              </tbody>
+              <tbody x-show="!loading.exceptions">
+                <template x-for="e in exceptions" :key="e.id">
+                  <tr>
+                    <td data-label="Date" x-text="e.date"></td>
+                    <td data-label="Status" x-text="e.is_available ? ('Open ' + e.start_time + '–' + e.end_time) : 'Blocked'"></td>
+                    <td class="row-actions">
+                      <button class="danger" @click="deleteException(e.id)">Remove</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <p class="empty-state" x-show="!loading.exceptions && exceptions.length === 0">No special days — your weekly hours apply every week.</p>
+          </div>
+        </div>
+
+        <!-- BOOKINGS -->
+        <div x-show="tab === 'bookings'">
+          <div class="card">
+            <div class="toolbar" x-show="!loading.bookings && (bookings.length || filterActive('bookings'))">
+              <input x-model="filters.bookings.q" placeholder="Search customer, service or phone…" aria-label="Search bookings" />
+              <select x-model="filters.bookings.status" aria-label="Filter bookings by status">
+                <option value="">All statuses</option>
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              <select x-model="filters.bookings.sort" aria-label="Sort bookings">
+                <option value="new">Newest first</option>
+                <option value="old">Oldest first</option>
+              </select>
+            </div>
+            <table>
+              <thead><tr><th scope="col">When</th><th scope="col">Service</th><th scope="col">Customer</th><th scope="col">Phone</th><th scope="col">Status</th><th scope="col">Payment</th></tr></thead>
+              <tbody x-show="loading.bookings">
+                <tr class="skel-row"><td><span class="skel" style="width:70%"></span></td><td><span class="skel" style="width:75%"></span></td><td><span class="skel" style="width:80%"></span></td><td><span class="skel" style="width:65%"></span></td><td><span class="skel" style="width:55%"></span></td><td><span class="skel" style="width:55%"></span></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:65%"></span></td><td><span class="skel" style="width:70%"></span></td><td><span class="skel" style="width:75%"></span></td><td><span class="skel" style="width:60%"></span></td><td><span class="skel" style="width:50%"></span></td><td><span class="skel" style="width:50%"></span></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:72%"></span></td><td><span class="skel" style="width:78%"></span></td><td><span class="skel" style="width:82%"></span></td><td><span class="skel" style="width:68%"></span></td><td><span class="skel" style="width:58%"></span></td><td><span class="skel" style="width:58%"></span></td></tr>
+              </tbody>
+              <tbody x-show="!loading.bookings">
+                <template x-for="b in filteredBookings()" :key="b.id">
+                  <tr>
+                    <td data-label="When" x-text="b.time_range ? formatBookingTime(b.time_range) : ''"></td>
+                    <td data-label="Service" x-text="b.service_name"></td>
+                    <td data-label="Customer" x-text="b.customer_name"></td>
+                    <td data-label="Phone" x-text="b.phone"></td>
+                    <td data-label="Status">
+                      <select :value="b.status" @change="updateBookingStatus(b.id, $event.target.value)" :aria-label="'Status for booking by ' + b.customer_name">
+                        <option value="pending">Pending</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </td>
+                    <td data-label="Payment"><span class="badge" :class="b.payment_status" x-text="b.payment_status || 'unpaid'"></span></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <p class="empty-state" x-show="!loading.bookings && filteredBookings().length === 0" x-text="filterActive('bookings') ? 'No bookings match — clear the filters to see everything.' : 'No bookings yet — upcoming appointments will land here.'"></p>
+          </div>
+        </div>
+
+        <!-- LISTINGS -->
+        <div x-show="tab === 'listings'">
+          <div class="card">
+            <h3 x-text="editingListingId ? 'Edit listing' : 'Add a listing'"></h3>
+            <div class="field-grid">
+              <div class="field"><label>Title</label><input x-model="listingForm.title" /></div>
+              <div class="field"><label>Type</label>
+                <select x-model="listingForm.listingType">
+                  <option value="sale">For sale</option>
+                  <option value="rent">For rent</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-grid">
+              <div class="field"><label>Price (whole units)</label><input type="number" x-model="listingForm.priceMinor" /></div>
+              <div class="field"><label>Location</label><input x-model="listingForm.location" /></div>
+            </div>
+            <div class="field-grid">
+              <div class="field"><label>Bedrooms</label><input type="number" x-model="listingForm.bedrooms" /></div>
+              <div class="field"><label>Bathrooms</label><input type="number" x-model="listingForm.bathrooms" /></div>
+            </div>
+            <div class="field-grid">
+              <div class="field"><label>Area (sqm)</label><input type="number" x-model="listingForm.areaSqm" /></div>
+              <div class="field"><label>Description</label><input x-model="listingForm.description" /></div>
+            </div>
+            <div class="field">
+              <label>Deposit to reserve (leave blank for no deposit)</label>
+              <input type="number" x-model="listingForm.depositAmountMinor" placeholder="e.g. 200000" />
+              <p class="hint">If set, customers see a "Pay deposit to reserve" option on this listing instead of just an inquiry form.</p>
+            </div>
+            <p class="error-text" x-show="listingError" x-text="listingError"></p>
+            <button class="btn" @click="submitListing" x-text="editingListingId ? 'Save changes' : 'Add listing'"></button>
+            <button class="btn ghost ml-sm" @click="resetListingForm" x-show="editingListingId">Cancel</button>
+          </div>
+
+          <!-- photo manager — only shown once a listing exists to attach photos to -->
+          <div class="card" x-show="editingListingId">
+            <h3>Photos</h3>
+            <input type="file" accept="image/jpeg,image/png,image/webp" @change="uploadListingPhoto($event, editingListingId)" class="mb-md" />
+            <div class="photo-grid">
+              <template x-for="(photo, idx) in listingPhotos" :key="photo.id">
+                <div class="photo-thumb">
+                  <img :src="'/media/' + photo.storage_path">
+                  <div class="photo-actions">
+                    <button type="button" class="row-actions" @click="moveListingPhoto(idx, -1)" :disabled="idx === 0">&uarr;</button>
+                    <button type="button" class="row-actions" @click="moveListingPhoto(idx, 1)" :disabled="idx === listingPhotos.length - 1">&darr;</button>
+                    <button type="button" class="row-actions danger" @click="deleteListingPhoto(photo.id)">&times;</button>
+                  </div>
+                </div>
+              </template>
+            </div>
+            <p class="hint" x-show="listingPhotos.length === 0">No photos yet — add one above.</p>
+          </div>
+
+          <div class="card">
+            <div class="toolbar" x-show="!loading.listings && (listings.length || filterActive('listings'))">
+              <input x-model="filters.listings.q" placeholder="Search title or location…" aria-label="Search listings" />
+              <select x-model="filters.listings.sort" aria-label="Sort listings">
+                <option value="new">Newest first</option>
+                <option value="name">Title A–Z</option>
+                <option value="price-asc">Price: low to high</option>
+                <option value="price-desc">Price: high to low</option>
+              </select>
+            </div>
+            <table>
+              <thead><tr><th scope="col">Title</th><th scope="col">Type</th><th scope="col">Price</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+              <tbody x-show="loading.listings">
+                <tr class="skel-row"><td><span class="skel" style="width:80%"></span></td><td><span class="skel" style="width:45%"></span></td><td><span class="skel" style="width:55%"></span></td><td></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:75%"></span></td><td><span class="skel" style="width:40%"></span></td><td><span class="skel" style="width:50%"></span></td><td></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:85%"></span></td><td><span class="skel" style="width:50%"></span></td><td><span class="skel" style="width:60%"></span></td><td></td></tr>
+              </tbody>
+              <tbody x-show="!loading.listings">
+                <template x-for="l in filteredListings()" :key="l.id">
+                  <tr>
+                    <td data-label="Title" x-text="l.title"></td>
+                    <td data-label="Type" x-text="l.listing_type"></td>
+                    <td data-label="Price" x-text="money(l.price_minor, l.currency)"></td>
+                    <td class="row-actions">
+                      <button @click="editListing(l)">Edit</button>
+                      <button class="danger" @click="deleteListing(l.id)">Remove</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <p class="empty-state" x-show="!loading.listings && filteredListings().length === 0" x-text="filterActive('listings') ? 'Nothing matches — clear the search to see everything.' : 'No listings yet — showcase your first property above.'"></p>
+          </div>
+        </div>
+
+        <!-- INQUIRIES -->
+        <div x-show="tab === 'inquiries'">
+          <div class="card">
+            <div class="toolbar" x-show="!loading.inquiries && (inquiries.length || filterActive('inquiries'))">
+              <input x-model="filters.inquiries.q" placeholder="Search name, phone or listing…" aria-label="Search inquiries" />
+              <select x-model="filters.inquiries.sort" aria-label="Sort inquiries">
+                <option value="new">Newest first</option>
+                <option value="old">Oldest first</option>
+              </select>
+            </div>
+            <table>
+              <thead><tr><th scope="col">Date</th><th scope="col">Listing</th><th scope="col">Name</th><th scope="col">Phone</th><th scope="col">Message</th></tr></thead>
+              <tbody x-show="loading.inquiries">
+                <tr class="skel-row"><td><span class="skel" style="width:60%"></span></td><td><span class="skel" style="width:75%"></span></td><td><span class="skel" style="width:65%"></span></td><td><span class="skel" style="width:70%"></span></td><td><span class="skel" style="width:90%"></span></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:55%"></span></td><td><span class="skel" style="width:70%"></span></td><td><span class="skel" style="width:60%"></span></td><td><span class="skel" style="width:65%"></span></td><td><span class="skel" style="width:85%"></span></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:62%"></span></td><td><span class="skel" style="width:78%"></span></td><td><span class="skel" style="width:68%"></span></td><td><span class="skel" style="width:72%"></span></td><td><span class="skel" style="width:88%"></span></td></tr>
+              </tbody>
+              <tbody x-show="!loading.inquiries">
+                <template x-for="i in filteredInquiries()" :key="i.id">
+                  <tr>
+                    <td data-label="Date" x-text="new Date(i.created_at).toLocaleDateString()"></td>
+                    <td data-label="Listing" x-text="i.listing_title"></td>
+                    <td data-label="Name" x-text="i.name"></td>
+                    <td data-label="Phone" x-text="i.phone"></td>
+                    <td data-label="Message" x-text="i.message"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <p class="empty-state" x-show="!loading.inquiries && filteredInquiries().length === 0" x-text="filterActive('inquiries') ? 'Nothing matches — clear the search to see everything.' : 'No enquiries yet — they\'ll appear here the moment buyers reach out.'"></p>
+          </div>
+        </div>
+
+        <!-- RESERVATIONS -->
+        <div x-show="tab === 'reservations'">
+          <div class="card">
+            <div class="toolbar" x-show="!loading.reservations && (reservations.length || filterActive('reservations'))">
+              <input x-model="filters.reservations.q" placeholder="Search name, phone or listing…" aria-label="Search reservations" />
+              <select x-model="filters.reservations.sort" aria-label="Sort reservations">
+                <option value="new">Newest first</option>
+                <option value="old">Oldest first</option>
+              </select>
+            </div>
+            <table>
+              <thead><tr><th scope="col">Date</th><th scope="col">Listing</th><th scope="col">Name</th><th scope="col">Phone</th><th scope="col">Deposit</th><th scope="col">Status</th></tr></thead>
+              <tbody x-show="loading.reservations">
+                <tr class="skel-row"><td><span class="skel" style="width:60%"></span></td><td><span class="skel" style="width:75%"></span></td><td><span class="skel" style="width:65%"></span></td><td><span class="skel" style="width:70%"></span></td><td><span class="skel" style="width:50%"></span></td><td><span class="skel" style="width:55%"></span></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:55%"></span></td><td><span class="skel" style="width:70%"></span></td><td><span class="skel" style="width:60%"></span></td><td><span class="skel" style="width:65%"></span></td><td><span class="skel" style="width:45%"></span></td><td><span class="skel" style="width:50%"></span></td></tr>
+              </tbody>
+              <tbody x-show="!loading.reservations">
+                <template x-for="r in filteredReservations()" :key="r.id">
+                  <tr>
+                    <td data-label="Date" x-text="new Date(r.created_at).toLocaleDateString()"></td>
+                    <td data-label="Listing" x-text="r.listing_title"></td>
+                    <td data-label="Name" x-text="r.name"></td>
+                    <td data-label="Phone" x-text="r.phone"></td>
+                    <td data-label="Deposit" x-text="money(r.deposit_amount_minor, r.currency)"></td>
+                    <td data-label="Status"><span class="badge" :class="r.payment_status" x-text="r.payment_status"></span></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <p class="empty-state" x-show="!loading.reservations && filteredReservations().length === 0" x-text="filterActive('reservations') ? 'Nothing matches — clear the search to see everything.' : 'No reservations yet — deposit holds will show up here.'"></p>
+          </div>
+        </div>
+
+        <!-- PAYMENTS -->
+        <div x-show="tab === 'payments'">
+          <div class="card">
+            <h3 style="margin-top:0;">Stripe</h3>
+            <p class="hint" style="margin-top:0;">Paste your Stripe API keys here. Get them from your Stripe Dashboard → Developers → API keys.</p>
+            <div class="field-grid">
+              <div class="field"><label>Publishable key</label><input x-model="stripeForm.publishableKey" placeholder="pk_test_..." /></div>
+              <div class="field"><label>Secret key</label><input type="password" x-model="stripeForm.secretKey" :placeholder="stripeStatus.has_secret_key ? 'Already set — leave blank to keep it' : 'sk_test_...'" /></div>
+            </div>
+            <div class="field-grid">
+              <div class="field"><label>Webhook signing secret</label><input type="password" x-model="stripeForm.webhookSecret" :placeholder="stripeStatus.has_webhook_secret ? 'Already set — leave blank to keep it' : 'whsec_...'" /></div>
+              <div class="field"><label>Mode</label>
+                <select x-model="stripeForm.mode">
+                  <option value="test">Test</option>
+                  <option value="live">Live</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label>Your webhook URL (paste this into your Stripe Dashboard → Developers → Webhooks)</label>
+              <input readonly :value="stripeStatus.webhookUrl" onclick="this.select()" />
+            </div>
+            <div class="cluster">
+              <button class="btn" @click="saveStripeCredentials(true)" :disabled="stripeSaving">Save &amp; enable</button>
+              <button class="btn ghost" @click="saveStripeCredentials(false)" :disabled="stripeSaving">Save without enabling</button>
+              <span class="badge" :class="stripeStatus.enabled ? 'confirmed' : 'pending'" x-text="stripeStatus.enabled ? 'Enabled' : 'Not enabled'"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CUSTOM DOMAIN -->
+        <div x-show="tab === 'domain'">
+          <div class="card">
+            <h3 style="margin-top:0;">Custom Domain</h3>
+            <p class="hint" style="margin-top:0;">
+              Point your own domain (e.g. <strong>shop.yourbrand.com</strong>) at this storefront instead of the
+              default subdomain. You stay in full control of your domain — we never touch your registrar.
+            </p>
+
+            <!-- current status strip — shown once a domain is saved -->
+            <div class="domain-status-strip" x-show="domainStatus.custom_domain">
+              <span class="domain-name" x-text="domainStatus.custom_domain"></span>
+              <span class="badge"
+                :class="domainStatus.custom_domain_verified_at ? 'verified' : 'unverified'"
+                x-text="domainStatus.custom_domain_verified_at ? '✓ Verified' : 'Unverified'">
+              </span>
+              <template x-if="domainStatus.custom_domain_verified_at">
+                <a :href="'https://' + domainStatus.custom_domain" target="_blank" rel="noopener"
+                   class="muted" style="font-size:0.8rem; text-decoration:none;">
+                  ↗ Visit
+                </a>
+              </template>
+            </div>
+
+            <!-- DNS instructions — shown when a domain is claimed but not yet verified -->
+            <div class="dns-instructions" x-show="domainStatus.custom_domain && !domainStatus.custom_domain_verified_at">
+              <h4>Point your DNS at this server</h4>
+              <p class="hint" style="margin-top:0; margin-bottom:0.75rem;">
+                Add an <strong>A record</strong> (or <strong>CNAME</strong> for a <code>www</code> subdomain)
+                in your domain registrar's DNS settings:
+              </p>
+              <div class="dns-record-row">
+                <span>TYPE</span>
+                <span>HOST</span>
+                <span>VALUE</span>
+              </div>
+              <div class="dns-record-row" style="margin-top:0.4rem;">
+                <span>A</span>
+                <span>@</span>
+                <span>→ your server IP (match your afrexpay.com A record)</span>
+              </div>
+              <p class="hint" style="margin-top:0.75rem; margin-bottom:0;">
+                DNS changes can take up to 48 hours to propagate, though usually live within minutes.
+                Once updated, click <strong>Verify DNS</strong> below.
+              </p>
+            </div>
+
+            <!-- input + action cluster -->
+            <div class="field">
+              <label>Your domain</label>
+              <div class="cluster">
+                <input id="domain-input" x-model="domainInput" placeholder="shop.yourbrand.com"
+                       class="flex-1"
+                       :disabled="domainSaving || domainVerifying" />
+                <button class="btn" id="domain-save-btn"
+                        @click="saveDomain"
+                        :disabled="domainSaving || !domainInput.trim()"
+                        x-text="domainSaving ? 'Saving...' : 'Save domain'">
+                </button>
+                <button class="btn accent" id="domain-verify-btn"
+                        @click="verifyDomain"
+                        :disabled="domainVerifying || !domainStatus.custom_domain"
+                        x-show="domainStatus.custom_domain && !domainStatus.custom_domain_verified_at"
+                        x-text="domainVerifying ? 'Checking DNS...' : 'Verify DNS'">
+                </button>
+              </div>
+              <p class="hint">Enter your full domain without <code>https://</code>, e.g. <code>shop.yourbrand.com</code>.</p>
+            </div>
+
+            <p class="error-text" x-show="domainError" x-text="domainError"></p>
+
+            <!-- verified confirmation -->
+            <template x-if="domainStatus.custom_domain_verified_at">
+              <p class="success-text">
+                ✓ Domain verified — your storefront is live at
+                <a :href="'https://' + domainStatus.custom_domain" target="_blank" rel="noopener"
+                   x-text="domainStatus.custom_domain"></a>.
+                TLS is issued automatically on first visit via Caddy.
+              </p>
+            </template>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="toast" :class="toast.kind" x-show="toast" x-text="toast && toast.message"></div>
+  </div>
+  <script>
+    (function () {
+      // Dashboard theme: manual override wins, otherwise follow the OS.
+      // Init ran pre-paint in <head>; same key as the landing page.
+      var root = document.documentElement;
+      var KEY = 'afrexpay-theme';
+      var btn = document.getElementById('theme-toggle');
+      function isDark() { return root.dataset.theme === 'dark'; }
+      function paint() {
+        if (!btn) return;
+        btn.setAttribute('aria-pressed', isDark() ? 'true' : 'false');
+        btn.setAttribute('aria-label', isDark() ? 'Switch to light mode' : 'Switch to dark mode');
+      }
+      if (btn) {
+        paint();
+        btn.addEventListener('click', function () {
+          root.dataset.theme = isDark() ? 'light' : 'dark';
+          try { localStorage.setItem(KEY, root.dataset.theme); } catch (e) {}
+          paint();
+        });
+      }
+      var mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+      if (mq) {
+        var onSystemChange = function (e) {
+          try {
+            if (!localStorage.getItem(KEY)) {
+              root.dataset.theme = e.matches ? 'dark' : 'light';
+              paint();
+            }
+          } catch (err) {}
+        };
+        if (mq.addEventListener) { mq.addEventListener('change', onSystemChange); }
+        else if (mq.addListener) { mq.addListener(onSystemChange); }
+      }
+    })();
+  </script>
+</body>
+</html>

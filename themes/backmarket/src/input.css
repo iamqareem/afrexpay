@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --accent: #00AB84;
+    --accent2: #007A5E;
+  }
+
+  body {
+    @apply bg-white text-[#1A1A1A] font-body;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  .product-card {
+    @apply bg-white border border-[#EDEDF0] rounded-xl overflow-hidden hover:shadow-lg transition-shadow duration-300;
+  }
+
+  .condition-badge {
+    @apply inline-block text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full;
+  }
+  .condition-excellent { @apply bg-[#00AB84] text-white; }
+  .condition-good { @apply bg-[#00AB84]/20 text-[#007A5E]; }
+  .condition-fair { @apply bg-[#FFB800]/20 text-[#B88600]; }
+
+  .price-original {
+    @apply text-[#6B6B6B] line-through text-sm;
+  }
+  .price-current {
+    @apply text-[#1A1A1A] font-bold text-lg;
+  }
+  .price-savings {
+    @apply bg-[#00AB84] text-white text-[10px] font-bold px-2 py-0.5 rounded-full;
+  }
+}

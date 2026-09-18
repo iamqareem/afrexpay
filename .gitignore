@@ -1,0 +1,14 @@
+node_modules/
+.env
+data/
+postgres-data/
+themes/*/node_modules/
+*.log
+# theme build/distribution archives + editor swap files
+*.tar.gz
+*.zip
+*.swp
+*.swo
+*.kate-swp
+*~
+themes/*/node_modules/

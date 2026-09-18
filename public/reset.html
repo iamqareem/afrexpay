@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reset your password — afrexpay</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <strong>afrexpay</strong>
+  </header>
+
+  <main class="hero utility-page">
+    <h1 class="utility-title">Reset your password</h1>
+
+    <form id="reset-form" class="card form-panel">
+      <div class="field">
+        <label for="newPassword">New password</label>
+        <div class="password-input-group">
+          <input id="newPassword" name="newPassword" type="password" required minlength="8" placeholder="At least 8 characters" />
+          <button type="button" class="toggle-password-btn" id="toggle-new-password" title="Toggle password visibility">
+            <svg class="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </button>
+        </div>
+        <div class="password-checklist" id="password-checklist">
+          <span class="checklist-item" id="chk-length">&bull; 8+ characters</span>
+          <span class="checklist-item" id="chk-cases">&bull; Uppercase & Lowercase</span>
+          <span class="checklist-item" id="chk-numsym">&bull; Number & Symbol</span>
+        </div>
+      </div>
+      <p class="error-text" id="reset-error" style="display:none;"></p>
+      <button type="submit" class="btn accent full-width" id="reset-submit">SET NEW PASSWORD</button>
+    </form>
+
+    <div id="reset-success" class="card form-panel" style="display:none;">
+      <p>Your password has been updated. You can log in on your store's admin page now.</p>
+    </div>
+
+    <div id="reset-invalid" class="card form-panel" style="display:none;">
+      <p>This reset link doesn't include a token. Request a new one from your admin login page.</p>
+    </div>
+  </main>
+
+  <script src="/js/reset.js"></script>
+</body>
+</html>

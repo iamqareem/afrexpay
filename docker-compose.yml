@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-afrexlab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-afrexlab}
+    volumes:
+      # Data lives on the host, right next to the compose file — back up ./data
+      # and you've backed up the whole platform (db + uploaded media).
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-afrexlab}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-afrexlab}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-afrexlab}
+      JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
+      PORT: 3000
+      BASE_DOMAIN: ${BASE_DOMAIN:-afrexlab.com}
+      MATRIX_HOMESERVER_URL: ${MATRIX_HOMESERVER_URL:-http://localhost:8008}
+      # If Synapse runs as its own container (rather than directly on the
+      # host), MATRIX_HOMESERVER_URL needs to be the service name on the
+      # shared Docker network (e.g. http://synapse:8008), not localhost —
+      # localhost inside this container means "this container," not the host.
+      MATRIX_ACCESS_TOKEN: ${MATRIX_ACCESS_TOKEN:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      PAYMENT_ENCRYPTION_KEY: ${PAYMENT_ENCRYPTION_KEY:?PAYMENT_ENCRYPTION_KEY must be set — see .env.example}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+    volumes:
+      # Merchant photos, until/unless this moves to object storage — same idea,
+      # host-side folder, easy to back up or later swap for a mounted bucket.
+      - ./data/media:/app/data/media
+    ports:
+      - "3000:3000"

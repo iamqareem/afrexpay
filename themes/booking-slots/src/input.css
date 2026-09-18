@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root { --accent: #4C5FD5; --accent2: #F4A340; }
+  body { @apply bg-ink text-paper font-body; }
+}
+
+@layer components {
+  .service-card {
+    @apply bg-surface border border-surface2 rounded-lg p-5 cursor-pointer transition-colors;
+  }
+  .service-card.selected {
+    @apply border-accent;
+  }
+  .slot-btn {
+    @apply bg-surface2 hover:bg-accent hover:text-ink text-paper text-sm py-2 px-3 rounded-md transition-colors;
+  }
+  .slot-btn.selected {
+    @apply bg-accent text-ink;
+  }
+}

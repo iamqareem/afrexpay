@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --accent: #3A7D5C;
+    --accent2: #E8A0A0;
+    --on-accent: #1a1a18; /* text on accent-colored buttons/badges — stays fixed in both themes */
+
+    /* dark theme (default) */
+    --ink: #1a1a18;
+    --paper: #f5f3ee;
+    --surface: #232320;
+    --surface2: #2c2c28;
+    --muted: #9b9890;
+  }
+
+  [data-theme="light"] {
+    --ink: #f5f3ee;
+    --paper: #1a1a18;
+    --surface: #ffffff;
+    --surface2: #e4e1d8;
+    --muted: #6b6860;
+  }
+
+  body { @apply bg-ink text-paper font-body transition-colors duration-200; }
+}
+
+@layer components {
+  .listing-card {
+    @apply bg-surface border border-surface2 rounded-lg overflow-hidden cursor-pointer transition-transform hover:-translate-y-0.5;
+  }
+  .listing-badge {
+    @apply inline-block text-xs font-semibold px-2 py-1 rounded bg-accent text-onaccent;
+  }
+}

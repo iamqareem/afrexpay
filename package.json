@@ -1,0 +1,31 @@
+{
+  "name": "afrexpay",
+  "version": "1.0.0",
+  "description": "Multi-tenant storefront platform — one process, subdomain-per-merchant.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate:up": "node-pg-migrate up",
+    "migrate:down": "node-pg-migrate down",
+    "migrate:create": "node-pg-migrate create",
+    "test": "node --test test/*.test.js tests/*.test.js"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@paypal/checkout-server-sdk": "^1.0.3",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^8.2.0",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.11.0",
+    "multer": "^2.2.0",
+    "node-pg-migrate": "^8.0.4",
+    "nodemailer": "^9.0.3",
+    "pg": "^8.22.0",
+    "stripe": "^22.5.0"
+  }
+}

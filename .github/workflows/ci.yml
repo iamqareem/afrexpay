@@ -1,0 +1,38 @@
+# CI — every push to main and every pull request.
+# Tests are DB-free by design, so no Postgres service is needed.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Syntax check (backend + admin + landing JS)
+        run: |
+          for f in $(git ls-files 'src/**/*.js' 'admin/js/**/*.js' 'public/js/**/*.js'); do
+            node --check "$f" || exit 1
+          done
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image (smoke test — catches broken Dockerfiles pre-merge)
+        run: docker build -t afrexpay:ci .

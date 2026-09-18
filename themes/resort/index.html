@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title id="page-title">Book an experience</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="min-h-screen">
+
+  <header class="border-b border-surface2">
+    <div class="max-w-5xl mx-auto px-5 py-5 flex items-baseline justify-between">
+      <div class="font-display text-2xl"><span id="brand-name"></span> <span id="brand-accent" class="text-accent"></span></div>
+      <p id="tagline" class="text-muted text-sm mt-1 hidden sm:block"></p>
+    </div>
+  </header>
+
+  <!-- SEARCH-FIRST HERO: the search bar is the primary action — typing
+    filters the experiences grid below instantly, no submit needed. -->
+  <section class="max-w-5xl mx-auto px-5 pt-12 pb-8 text-center">
+    <p class="font-body text-xs tracking-widest text-accent uppercase mb-3">Pool · Spa · Fitness · Recreation</p>
+    <h1 class="font-display text-4xl md:text-5xl mb-2"><span id="hero-line1">Find your</span> <span id="hero-line2">moment</span></h1>
+    <p id="hero-subtitle" class="text-muted mb-7">Search experiences, pick a time, and reserve in under a minute.</p>
+    <div class="max-w-xl mx-auto relative">
+      <input type="search" id="service-search" placeholder="Try ‘swim’, ‘spa’, ‘tennis’…" autocomplete="off"
+        class="w-full bg-surface border border-surface2 rounded-full px-6 py-4 text-paper placeholder:text-muted focus:outline-none focus:border-accent" />
+      <button id="search-clear" type="button" class="hidden absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-paper text-xl leading-none">&times;</button>
+    </div>
+    <p id="search-count" class="text-muted text-sm mt-3"></p>
+  </section>
+
+  <main class="max-w-5xl mx-auto px-5 pb-16">
+    <!-- STEP 1: search results / experiences -->
+    <div id="step-service">
+      <div id="service-list" class="grid gap-5 sm:grid-cols-2"></div>
+      <div id="no-results" class="hidden text-center py-14">
+        <p class="font-display text-2xl mb-2">Nothing matches that search</p>
+        <p class="text-muted text-sm">Try a different word — or browse everything below.</p>
+        <button id="reset-search" type="button" class="mt-5 border border-surface2 rounded-full px-5 py-2 text-sm hover:border-accent transition-colors">Show all experiences</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: pick a date + slot -->
+    <div id="step-slots" class="mt-12 hidden max-w-2xl">
+      <h2 class="font-display text-2xl mb-1">Pick a day &amp; time</h2>
+      <p id="slots-for" class="text-muted text-sm mb-4"></p>
+      <input type="date" id="date-picker" class="bg-surface border border-surface2 rounded-md px-3 py-2 mb-4" />
+      <div id="slot-list" class="flex flex-wrap gap-2"></div>
+      <p id="no-slots" class="text-muted text-sm hidden">No open slots that day — try another date.</p>
+    </div>
+
+    <!-- STEP 3: details -->
+    <div id="step-details" class="mt-12 hidden max-w-md">
+      <h2 class="font-display text-2xl mb-4">Your details</h2>
+      <form id="booking-form" class="space-y-3">
+        <div>
+          <label class="block text-xs text-muted mb-1">Name</label>
+          <input name="customerName" required class="w-full bg-surface border border-surface2 rounded-md px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-xs text-muted mb-1">Phone</label>
+          <input name="phone" required class="w-full bg-surface border border-surface2 rounded-md px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-xs text-muted mb-1">Notes (optional)</label>
+          <textarea name="notes" rows="2" class="w-full bg-surface border border-surface2 rounded-md px-3 py-2"></textarea>
+        </div>
+        <p id="booking-error" class="text-sm hidden" style="color:#e5534b;"></p>
+        <button type="submit" class="w-full bg-accent text-ink font-bold py-3 rounded-md">RESERVE</button>
+      </form>
+    </div>
+
+    <!-- CONFIRMATION -->
+    <div id="step-confirm" class="mt-12 hidden max-w-md">
+      <h2 class="font-display text-2xl mb-2">Reserved ✓</h2>
+      <p class="text-muted" id="confirm-detail"></p>
+      <p id="confirm-paid" class="font-bold mt-3 hidden" style="color:#3f7d4a;">Payment received ✓ — thanks!</p>
+      <p id="pay-error" class="text-sm hidden mt-3" style="color:#e5534b;"></p>
+      <button id="pay-now" type="button" class="w-full bg-accent text-ink font-bold py-3 rounded-md mt-4">PAY NOW WITH CARD</button>
+      <button id="book-another" type="button" class="w-full border border-surface2 py-3 rounded-md mt-3 text-sm hover:border-accent transition-colors">Book another experience</button>
+    </div>
+  </main>
+
+  <footer class="max-w-5xl mx-auto px-5 py-10 border-t border-surface2 text-center">
+    <p id="footer-text" class="text-muted text-xs"></p>
+  </footer>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

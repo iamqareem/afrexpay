@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Storefront</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    /* Yeezy exact styles */
+    body {
+      text-transform: uppercase;
+      font-feature-settings: "zero" 0;
+      font-variant-numeric: normal;
+    }
+    .yeezy-font {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#fff] text-[#000]">
+
+  <yeezy-app>
+    <yeezy-header></yeezy-header>
+    <yeezy-grid></yeezy-grid>
+    <yeezy-detail></yeezy-detail>
+    
+    <footer class="max-w-7xl mx-auto px-5 py-10 border-t border-[#0000001f] text-center bg-[#fff] mt-8">
+      <p id="footer-text" class="text-xs text-[#000000b3] yeezy-font"></p>
+    </footer>
+
+    <yeezy-cart></yeezy-cart>
+    <yeezy-checkout></yeezy-checkout>
+  </yeezy-app>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

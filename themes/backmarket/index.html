@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title id="page-title">Store</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="min-h-screen">
+
+  <header class="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-[#EDEDF0]">
+    <div class="max-w-7xl mx-auto px-5 py-4 flex items-center justify-between">
+      <div class="font-display text-2xl font-bold text-[#1A1A1A]">
+        <span id="brand-name"></span><span id="brand-accent" class="text-[#00AB84]"></span>
+      </div>
+      <button id="cart-open" class="relative text-[#1A1A1A] text-sm font-medium hover:text-[#00AB84] transition-colors">
+        CART (<span id="cart-count">0</span>)
+      </button>
+    </div>
+  </header>
+
+  <!-- Hero Section - Backmarket style -->
+  <section class="bg-gradient-to-r from-[#00AB84]/5 to-[#007A5E]/5 border-b border-[#EDEDF0]">
+    <div class="max-w-7xl mx-auto px-5 py-12 md:py-16">
+      <div class="max-w-2xl">
+        <p id="tagline" class="text-sm text-[#00AB84] font-bold uppercase tracking-wider mb-3"></p>
+        <h1 class="font-display text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.1] text-[#1A1A1A]">
+          <span id="hero-line1"></span><br/>
+          <span id="hero-line2" class="text-[#00AB84]"></span>
+        </h1>
+        <p id="hero-subtitle" class="mt-4 text-lg text-[#6B6B6B] max-w-lg"></p>
+        <div class="mt-6 flex flex-wrap gap-3">
+          <span class="inline-flex items-center gap-2 bg-[#00AB84]/10 text-[#007A5E] text-sm font-medium px-4 py-2 rounded-full">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zm-1 12V9h2v5h-2zm0-7V5h2v2h-2z"/></svg>
+            Certified Refurbished
+          </span>
+          <span class="inline-flex items-center gap-2 bg-[#00AB84]/10 text-[#007A5E] text-sm font-medium px-4 py-2 rounded-full">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zm1 14H9v-2h2v2zm0-4H9V5h2v7z"/></svg>
+            12-Month Warranty
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Product Grid -->
+  <section class="max-w-7xl mx-auto px-5 py-8">
+    <div class="flex items-baseline justify-between mb-6">
+      <h2 class="font-display text-2xl font-bold text-[#1A1A1A]">PRODUCTS</h2>
+      <p id="product-count" class="text-sm text-[#6B6B6B]">0 ITEMS</p>
+    </div>
+    <div id="product-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="max-w-7xl mx-auto px-5 py-10 border-t border-[#EDEDF0] text-center">
+    <p id="footer-text" class="text-xs text-[#6B6B6B]"></p>
+  </footer>
+
+  <!-- Cart Drawer -->
+  <div id="cart-overlay" class="fixed inset-0 bg-black/20 z-50 hidden"></div>
+  <aside id="cart-drawer" class="fixed top-0 right-0 h-full w-full sm:w-96 bg-white z-50 translate-x-full transition-transform duration-300 flex flex-col border-l border-[#EDEDF0]">
+    <div class="flex items-center justify-between px-6 py-5 border-b border-[#EDEDF0]">
+      <h3 class="font-display text-xl font-bold text-[#1A1A1A]">Cart</h3>
+      <button id="cart-close" class="text-[#6B6B6B] hover:text-[#1A1A1A] text-2xl">&times;</button>
+    </div>
+    <div id="cart-items" class="flex-1 overflow-y-auto px-6 py-4 space-y-4"></div>
+    <div class="px-6 py-5 border-t border-[#EDEDF0]">
+      <div class="flex justify-between mb-4 text-[#1A1A1A]">
+        <span class="font-medium">Total</span>
+        <span id="cart-total" class="font-bold"></span>
+      </div>
+      <button id="checkout-open" class="w-full bg-[#00AB84] text-white font-bold py-3 rounded-lg hover:bg-[#007A5E] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+        CHECKOUT
+      </button>
+    </div>
+  </aside>
+
+  <!-- Checkout Modal -->
+  <div id="checkout-overlay" class="fixed inset-0 bg-black/20 z-[60] hidden items-center justify-center px-4">
+    <div class="bg-white border border-[#EDEDF0] rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="font-display text-xl font-bold text-[#1A1A1A]">DELIVERY DETAILS</h3>
+        <button id="checkout-close" class="text-[#6B6B6B] hover:text-[#1A1A1A] text-2xl leading-none">&times;</button>
+      </div>
+      <form id="checkout-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-[#6B6B6B] mb-1" for="f-name">FULL NAME</label>
+          <input id="f-name" name="customerName" required class="w-full bg-[#F7F7F8] border border-[#EDEDF0] rounded-lg px-3 py-2 text-[#1A1A1A] focus:outline-none focus:border-[#00AB84]" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-[#6B6B6B] mb-1" for="f-phone">PHONE</label>
+          <input id="f-phone" name="phone" required class="w-full bg-[#F7F7F8] border border-[#EDEDF0] rounded-lg px-3 py-2 text-[#1A1A1A] focus:outline-none focus:border-[#00AB84]" placeholder="07XXXXXXXX" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-[#6B6B6B] mb-1" for="f-address">DELIVERY ADDRESS</label>
+          <textarea id="f-address" name="address" required rows="2" class="w-full bg-[#F7F7F8] border border-[#EDEDF0] rounded-lg px-3 py-2 text-[#1A1A1A] focus:outline-none focus:border-[#00AB84]"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-[#6B6B6B] mb-1" for="f-notes">NOTES (optional)</label>
+          <textarea id="f-notes" name="deliveryNotes" rows="2" class="w-full bg-[#F7F7F8] border border-[#EDEDF0] rounded-lg px-3 py-2 text-[#1A1A1A] focus:outline-none focus:border-[#00AB84]"></textarea>
+        </div>
+        <p id="checkout-error" class="text-[#007A5E] text-sm hidden"></p>
+        <button type="submit" id="checkout-submit" class="w-full bg-[#00AB84] text-white font-bold py-3 rounded-lg hover:bg-[#007A5E] transition-colors">
+          PLACE ORDER
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirm-overlay" class="fixed inset-0 bg-black/20 z-[60] hidden items-center justify-center px-4">
+    <div class="bg-white border border-[#EDEDF0] rounded-xl max-w-md w-full p-6 text-center">
+      <p class="text-sm text-[#00AB84] font-bold uppercase tracking-wider mb-2">Order Confirmed</p>
+      <h3 class="font-display text-2xl font-bold text-[#1A1A1A] mb-4">ORDER #<span id="confirm-id"></span></h3>
+      <p id="confirm-paid" class="font-bold mb-4 hidden" style="color:#00AB84;">Payment received ✓ — thanks!</p>
+      <p class="text-[#6B6B6B] mb-6">We'll reach out on the phone number you gave us to confirm delivery and payment.</p>
+      <p id="pay-error" class="text-sm hidden mb-4" style="color:#b3432e;"></p>
+      <button id="pay-now" class="w-full bg-[#00AB84] text-white font-bold py-3 rounded-lg hover:bg-[#007A5E] transition-colors mb-3">PAY NOW WITH CARD</button>
+      <button id="confirm-close" class="w-full bg-white border border-[#EDEDF0] text-[#1A1A1A] font-bold py-3 rounded-lg hover:border-[#00AB84] transition-colors">DONE</button>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

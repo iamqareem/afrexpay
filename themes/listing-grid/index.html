@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title id="page-title">Listings</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="min-h-screen">
+  <header class="border-b border-surface2">
+    <div class="max-w-5xl mx-auto px-5 py-5 flex items-center justify-between">
+      <div class="font-display text-2xl"><span id="brand-name"></span> <span id="brand-accent" class="text-accent"></span></div>
+      <button id="theme-toggle" type="button" aria-label="Toggle light/dark theme" class="text-sm border border-surface2 rounded-md px-3 py-1.5 text-muted hover:text-paper transition-colors">
+        <span id="theme-toggle-icon">🌙</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-5 py-10">
+    <!-- LIST VIEW -->
+    <div id="view-list">
+      <h1 class="font-display text-3xl mb-1"><span id="hero-line1"></span> <span id="hero-line2"></span></h1>
+      <p id="hero-subtitle" class="text-muted mb-8"></p>
+      <div id="listing-grid" class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"></div>
+    </div>
+
+    <!-- DETAIL VIEW -->
+    <div id="view-detail" class="hidden">
+      <button id="back-btn" class="text-accent text-sm mb-4">&larr; Back to listings</button>
+      <div id="detail-photos" class="grid grid-cols-2 gap-2 mb-6"></div>
+      <h2 id="detail-title" class="font-display text-2xl mb-1"></h2>
+      <p id="detail-price" class="text-accent text-lg font-semibold mb-2"></p>
+      <p id="detail-meta" class="text-muted text-sm mb-4"></p>
+      <p id="detail-description" class="mb-8"></p>
+
+      <!-- Shown when the listing has a deposit configured — pay to reserve,
+           replaces the plain inquiry form for this listing only. -->
+      <div id="reservation-panel" class="hidden max-w-md bg-surface border border-surface2 rounded-lg p-5">
+        <h3 class="font-semibold mb-1">Reserve this listing</h3>
+        <p class="text-muted text-sm mb-3">A deposit of <span id="deposit-amount" class="text-accent font-semibold"></span> secures your reservation.</p>
+        <form id="reservation-form" class="space-y-3">
+          <div>
+            <label class="block text-xs text-muted mb-1">Name</label>
+            <input name="name" required class="w-full bg-ink border border-surface2 rounded-md px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-xs text-muted mb-1">Phone</label>
+            <input name="phone" required class="w-full bg-ink border border-surface2 rounded-md px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-xs text-muted mb-1">Message (optional)</label>
+            <textarea name="message" rows="2" class="w-full bg-ink border border-surface2 rounded-md px-3 py-2"></textarea>
+          </div>
+          <p id="reservation-error" class="text-sm hidden" style="color:#e5534b;"></p>
+          <button type="submit" id="reservation-submit" class="w-full bg-accent text-onaccent font-bold py-2.5 rounded-md">PAY DEPOSIT TO RESERVE</button>
+        </form>
+      </div>
+
+      <div class="max-w-md bg-surface border border-surface2 rounded-lg p-5">
+        <h3 class="font-semibold mb-3">Interested? Send an inquiry</h3>
+        <form id="inquiry-form" class="space-y-3">
+          <div>
+            <label class="block text-xs text-muted mb-1">Name</label>
+            <input name="name" required class="w-full bg-ink border border-surface2 rounded-md px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-xs text-muted mb-1">Phone</label>
+            <input name="phone" required class="w-full bg-ink border border-surface2 rounded-md px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-xs text-muted mb-1">Message (optional)</label>
+            <textarea name="message" rows="2" class="w-full bg-ink border border-surface2 rounded-md px-3 py-2"></textarea>
+          </div>
+          <p id="inquiry-error" class="text-sm hidden" style="color:#e5534b;"></p>
+          <button type="submit" class="w-full bg-accent text-onaccent font-bold py-2.5 rounded-md">SEND INQUIRY</button>
+        </form>
+        <div id="inquiry-sent" class="hidden text-center py-4">
+          <p>Thanks — we'll be in touch shortly.</p>
+        </div>
+      </div>
+
+      <div id="reservation-confirmed" class="hidden max-w-md bg-surface border border-surface2 rounded-lg p-5 mt-4">
+        <p class="text-accent font-semibold mb-1">Deposit received ✓</p>
+        <p class="text-muted text-sm">Your reservation is confirmed. The merchant will be in touch shortly.</p>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

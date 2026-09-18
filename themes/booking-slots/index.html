@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title id="page-title">Book an appointment</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="min-h-screen">
+  <header class="border-b border-surface2">
+    <div class="max-w-3xl mx-auto px-5 py-5">
+      <div class="font-display text-2xl"><span id="brand-name"></span> <span id="brand-accent" class="text-accent"></span></div>
+      <p id="tagline" class="text-muted text-sm mt-1"></p>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-5 py-10">
+    <h1 class="font-display text-3xl mb-1"><span id="hero-line1"></span> <span id="hero-line2"></span></h1>
+    <p id="hero-subtitle" class="text-muted mb-8"></p>
+
+    <!-- STEP 1: pick a service -->
+    <div id="step-service">
+      <h2 class="text-lg font-semibold mb-4">1. Choose a service</h2>
+      <div id="service-list" class="grid gap-3 sm:grid-cols-2"></div>
+    </div>
+
+    <!-- STEP 2: pick a date + slot -->
+    <div id="step-slots" class="mt-10 hidden">
+      <h2 class="text-lg font-semibold mb-4">2. Pick a time</h2>
+      <input type="date" id="date-picker" class="bg-surface border border-surface2 rounded-md px-3 py-2 mb-4" />
+      <div id="slot-list" class="flex flex-wrap gap-2"></div>
+      <p id="no-slots" class="text-muted text-sm hidden">No open slots that day — try another date.</p>
+    </div>
+
+    <!-- STEP 3: details -->
+    <div id="step-details" class="mt-10 hidden max-w-md">
+      <h2 class="text-lg font-semibold mb-4">3. Your details</h2>
+      <form id="booking-form" class="space-y-3">
+        <div>
+          <label class="block text-xs text-muted mb-1">Name</label>
+          <input name="customerName" required class="w-full bg-surface border border-surface2 rounded-md px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-xs text-muted mb-1">Phone</label>
+          <input name="phone" required class="w-full bg-surface border border-surface2 rounded-md px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-xs text-muted mb-1">Notes (optional)</label>
+          <textarea name="notes" rows="2" class="w-full bg-surface border border-surface2 rounded-md px-3 py-2"></textarea>
+        </div>
+        <p id="booking-error" class="text-sm hidden" style="color:#e5534b;"></p>
+        <button type="submit" class="w-full bg-accent text-ink font-bold py-3 rounded-md">CONFIRM BOOKING</button>
+      </form>
+    </div>
+
+    <!-- CONFIRMATION -->
+    <div id="step-confirm" class="mt-10 hidden max-w-md">
+      <h2 class="text-lg font-semibold mb-2">Booked ✓</h2>
+      <p class="text-muted" id="confirm-detail"></p>
+      <p id="confirm-paid" class="font-bold mt-3 hidden" style="color:#3f7d4a;">Payment received ✓ — thanks!</p>
+      <p id="pay-error" class="text-sm hidden mt-3" style="color:#e5534b;"></p>
+      <button id="pay-now" type="button" class="w-full bg-accent text-ink font-bold py-3 rounded-md mt-4">PAY NOW WITH CARD</button>
+    </div>
+  </main>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-surface text-onSurface font-sans antialiased;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-onPrimary px-6 py-3 rounded-full font-medium tracking-wide transition-transform hover:scale-105 active:scale-95 shadow-soft hover:shadow-float;
+  }
+  .btn-outline {
+    @apply bg-transparent border-2 border-onSurfaceVariant text-onSurface px-6 py-3 rounded-full font-medium tracking-wide transition-all hover:border-onSurface hover:bg-surfaceVariant active:scale-95;
+  }
+  .card {
+    @apply bg-surface rounded-lg shadow-soft hover:shadow-float transition-shadow duration-300 overflow-hidden border border-surfaceVariant;
+  }
+}
+@media (max-width: 640px) {
+  .card {
+    @apply w-full;
+  }
+}

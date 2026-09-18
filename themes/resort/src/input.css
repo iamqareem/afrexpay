@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root { --accent: #c9a227; --accent2: #2a9d8f; }
+  body { @apply bg-ink text-paper font-body; }
+}
+
+@layer components {
+  .service-card {
+    @apply bg-surface border border-surface2 rounded-2xl overflow-hidden cursor-pointer transition-colors;
+  }
+  .service-card:hover {
+    @apply border-accent;
+  }
+  .service-card.selected {
+    @apply border-accent;
+    box-shadow: 0 0 0 1px var(--accent, #c9a227);
+  }
+  .slot-btn {
+    @apply bg-surface2 hover:bg-accent hover:text-ink text-paper text-sm py-2 px-4 rounded-full transition-colors;
+  }
+  .slot-btn.selected {
+    @apply bg-accent text-ink font-bold;
+  }
+  .photo-badge {
+    @apply absolute bottom-3 right-3 bg-ink/70 text-paper text-xs font-bold px-2 py-1 rounded-full;
+  }
+}
