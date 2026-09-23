@@ -2,6 +2,7 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
 const controller = require("./auth.controller");
+const { getThemesForVertical } = require("../../verticals");
 
 const router = express.Router();
 
@@ -31,6 +32,21 @@ const resetRequestLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many reset requests. Try again later." },
+});
+
+// Public theme catalog for the signup wizard (base domain, no tenant yet).
+// Theme metadata is already public — every storefront renders it — so no
+// auth needed. resolveVertical falls back to products on bad input, same
+// as the wizard's previous hardcoded fallback. Single source of truth:
+// src/verticals.js; the wizard's inline list is offline fallback only.
+router.get("/themes", (req, res) => {
+  const themes = getThemesForVertical(req.query.vertical).map((t) => ({
+    id: t.id,
+    label: t.label,
+    subCategory: t.subCategory,
+    desc: t.description,
+  }));
+  res.json({ themes });
 });
 
 router.post("/signup", signupLimiter, controller.signup);

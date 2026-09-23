@@ -62,3 +62,14 @@ test("getThemeDetails falls back to hangtag for unknown slugs", () => {
   assert.equal(getThemeDetails("resort").id, "resort");
   assert.equal(getThemeDetails("no-such-theme").id, "hangtag");
 });
+
+test("wizard contract: every theme carries the fields signup.js renders", () => {
+  // GET /api/auth/themes maps registry entries to { id, label, subCategory,
+  // desc }. If a field is missing here, the wizard card renders blank.
+  // souk must be present or new themes silently vanish from signup.
+  const products = getThemesForVertical("products");
+  assert.ok(products.some((t) => t.id === "souk"), "souk in products");
+  for (const t of products) {
+    assert.ok(t.id && t.label && t.subCategory && t.description, `theme ${t.id} has wizard copy`);
+  }
+});

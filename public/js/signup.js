@@ -26,9 +26,28 @@ function getSelectedVertical() {
   return radio ? radio.value : "products";
 }
 
+// Server-fetched theme lists, keyed by vertical. The hardcoded
+// THEMES_BY_VERTICAL below is offline fallback only — the single source
+// of truth is GET /api/auth/themes (src/verticals.js).
+const serverThemes = {};
+
+async function fetchServerThemes(vertical) {
+  if (serverThemes[vertical]) return serverThemes[vertical];
+  try {
+    const res = await fetch(`/api/auth/themes?vertical=${encodeURIComponent(vertical)}`);
+    if (!res.ok) throw new Error("theme fetch failed");
+    const data = await res.json();
+    if (!Array.isArray(data.themes) || data.themes.length === 0) throw new Error("empty theme list");
+    serverThemes[vertical] = data.themes;
+    return data.themes;
+  } catch {
+    return null;
+  }
+}
+
 function renderThemeWizardGrid() {
   const vertical = getSelectedVertical();
-  const themes = THEMES_BY_VERTICAL[vertical] || THEMES_BY_VERTICAL.products;
+  const themes = serverThemes[vertical] || THEMES_BY_VERTICAL[vertical] || THEMES_BY_VERTICAL.products;
   const grid = document.getElementById("theme-wizard-grid");
   const labelEl = document.getElementById("selected-vertical-label");
 
@@ -61,6 +80,21 @@ function selectThemeInWizard(themeSlug) {
   renderThemeWizardGrid();
 }
 
+// Render instantly from fallback, then upgrade to server truth when it
+// arrives. Called on load (prefetch), vertical change, and step-2 entry
+// so the grid never blocks on network.
+async function refreshThemesThenRender() {
+  renderThemeWizardGrid();
+  const vertical = getSelectedVertical();
+  const fetched = await fetchServerThemes(vertical);
+  if (fetched) renderThemeWizardGrid();
+}
+
+// Prefetch all verticals on load so step 2 never waits.
+["products", "services", "listings"].forEach((v) => {
+  fetchServerThemes(v);
+});
+
 function goToStep(step) {
   const heroInput = document.getElementById("hero-subdomain-input");
   const formSubdomain = document.getElementById("subdomain");
@@ -83,7 +117,7 @@ function goToStep(step) {
   if (activeContent) activeContent.classList.add("active");
 
   if (step === 2) {
-    renderThemeWizardGrid();
+    refreshThemesThenRender();
   }
 }
 
@@ -163,7 +197,7 @@ document.querySelectorAll('input[name="vertical"]').forEach((radio) => {
   radio.addEventListener("change", (e) => {
     document.querySelectorAll(".category-radio-card").forEach((card) => card.classList.remove("active"));
     e.target.closest(".category-radio-card").classList.add("active");
-    renderThemeWizardGrid();
+    refreshThemesThenRender();
   });
 });
 

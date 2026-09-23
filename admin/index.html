@@ -187,18 +187,17 @@
           <div class="card">
             <h3 x-text="editingProductId ? 'Edit product' : 'Add a product'"></h3>
             <div class="field-grid">
-              <div class="field"><label>SKU</label><input x-model="productForm.sku" :disabled="editingProductId" /></div>
-              <div class="field"><label>Name</label><input x-model="productForm.name" /></div>
+              <div class="field"><label for="p-sku">SKU</label><input id="p-sku" x-model="productForm.sku" :disabled="editingProductId" /></div>
+              <div class="field"><label for="p-name">Name</label><input id="p-name" x-model="productForm.name" /></div>
             </div>
             <div class="field-grid">
-              <div class="field"><label>Category</label><input x-model="productForm.category" /></div>
-              <div class="field"><label>Price (whole units, e.g. 45000)</label><input type="number" x-model="productForm.priceMinor" /></div>
+              <div class="field"><label for="p-category">Category</label><input id="p-category" x-model="productForm.category" /></div>
+              <div class="field"><label for="p-price">Price (whole units, e.g. 45000)</label><input id="p-price" type="number" x-model="productForm.priceMinor" /></div>
             </div>
             <div class="field-grid">
-              <div class="field"><label>Sizes (comma separated)</label><input x-model="productForm.sizes" placeholder="S, M, L, XL" /></div>
-              <div class="field"><label>Stock (leave blank = untracked)</label><input type="number" x-model="productForm.stockQty" /></div>
-            </div>
-            <div class="field"><label>Description</label><textarea rows="2" x-model="productForm.blurb"></textarea></div>
+              <div class="field"><label for="p-sizes">Sizes (comma separated)</label><input id="p-sizes" x-model="productForm.sizes" placeholder="S, M, L, XL" /></div>
+              <div class="field"><label for="p-stock">Stock (leave blank = untracked)</label><input id="p-stock" type="number" x-model="productForm.stockQty" /></div>
+            <div class="field"><label for="p-blurb">Description</label><textarea id="p-blurb" rows="2" x-model="productForm.blurb"></textarea></div>
             <p class="error-text" x-show="productError" x-text="productError"></p>
             <button class="btn" @click="submitProduct" x-text="editingProductId ? 'Save changes' : 'Add product'"></button>
             <button class="btn ghost ml-sm" @click="resetProductForm" x-show="editingProductId">Cancel</button>
@@ -213,9 +212,9 @@
                 <div class="photo-thumb">
                   <img :src="'/media/' + photo.storage_path">
                   <div class="photo-actions">
-                    <button type="button" class="row-actions" @click="moveProductPhoto(idx, -1)" :disabled="idx === 0">&uarr;</button>
-                    <button type="button" class="row-actions" @click="moveProductPhoto(idx, 1)" :disabled="idx === productPhotos.length - 1">&darr;</button>
-                    <button type="button" class="row-actions danger" @click="deleteProductPhoto(photo.id)">&times;</button>
+                    <button type="button" class="row-actions" aria-label="Move photo earlier" @click="moveProductPhoto(idx, -1)" :disabled="idx === 0">&uarr;</button>
+                    <button type="button" class="row-actions" aria-label="Move photo later" @click="moveProductPhoto(idx, 1)" :disabled="idx === productPhotos.length - 1">&darr;</button>
+                    <button type="button" class="row-actions danger" aria-label="Delete photo" @click="deleteProductPhoto(photo.id)">&times;</button>
                   </div>
                 </div>
               </template>
@@ -323,12 +322,12 @@
           <div class="card">
             <h3 x-text="editingServiceId ? 'Edit service' : 'Add a service'"></h3>
             <div class="field-grid">
-              <div class="field"><label>Name</label><input x-model="serviceForm.name" /></div>
-              <div class="field"><label>Duration (minutes)</label><input type="number" x-model="serviceForm.durationMinutes" /></div>
+              <div class="field"><label for="s-name">Name</label><input id="s-name" x-model="serviceForm.name" /></div>
+              <div class="field"><label for="s-duration">Duration (minutes)</label><input id="s-duration" type="number" x-model="serviceForm.durationMinutes" /></div>
             </div>
             <div class="field-grid">
-              <div class="field"><label>Price (whole units)</label><input type="number" x-model="serviceForm.priceMinor" /></div>
-              <div class="field"><label>Description</label><input x-model="serviceForm.description" /></div>
+              <div class="field"><label for="s-price">Price (whole units)</label><input id="s-price" type="number" x-model="serviceForm.priceMinor" /></div>
+              <div class="field"><label for="s-desc">Description</label><input id="s-desc" x-model="serviceForm.description" /></div>
             </div>
             <p class="error-text" x-show="serviceError" x-text="serviceError"></p>
             <button class="btn" @click="submitService" x-text="editingServiceId ? 'Save changes' : 'Add service'"></button>
@@ -344,9 +343,9 @@
                 <div class="photo-thumb">
                   <img :src="'/media/' + photo.storage_path">
                   <div class="photo-actions">
-                    <button type="button" class="row-actions" @click="moveServicePhoto(idx, -1)" :disabled="idx === 0">&uarr;</button>
-                    <button type="button" class="row-actions" @click="moveServicePhoto(idx, 1)" :disabled="idx === servicePhotos.length - 1">&darr;</button>
-                    <button type="button" class="row-actions danger" @click="deleteServicePhoto(photo.id)">&times;</button>
+                    <button type="button" class="row-actions" aria-label="Move photo earlier" @click="moveServicePhoto(idx, -1)" :disabled="idx === 0">&uarr;</button>
+                    <button type="button" class="row-actions" aria-label="Move photo later" @click="moveServicePhoto(idx, 1)" :disabled="idx === servicePhotos.length - 1">&darr;</button>
+                    <button type="button" class="row-actions danger" aria-label="Delete photo" @click="deleteServicePhoto(photo.id)">&times;</button>
                   </div>
                 </div>
               </template>
@@ -396,11 +395,11 @@
             <p class="muted">Set your working hours for each day. Leave a day blank to stay closed that day.</p>
             <template x-for="(day, idx) in weekDays" :key="idx">
               <div class="field-grid align-end">
-                <div class="field"><label x-text="day"></label>
-                  <input type="time" x-model="weeklyHours[idx].startTime" />
+                <div class="field"><label :for="'wh-start-' + idx" x-text="day + ' opens'"></label>
+                  <input type="time" :id="'wh-start-' + idx" x-model="weeklyHours[idx].startTime" />
                 </div>
-                <div class="field"><label>&nbsp;</label>
-                  <input type="time" x-model="weeklyHours[idx].endTime" />
+                <div class="field"><label :for="'wh-end-' + idx" x-text="day + ' closes'"></label>
+                  <input type="time" :id="'wh-end-' + idx" x-model="weeklyHours[idx].endTime" />
                 </div>
               </div>
             </template>
@@ -410,17 +409,17 @@
             <h3>Add a one-off exception</h3>
             <p class="muted">Block off a specific date (holiday, day off), or open extra hours on a day you're normally closed.</p>
             <div class="field-grid">
-              <div class="field"><label>Date</label><input type="date" x-model="exceptionForm.date" /></div>
-              <div class="field"><label>Available that day?</label>
-                <select x-model="exceptionForm.isAvailable">
+              <div class="field"><label for="ex-date">Date</label><input id="ex-date" type="date" x-model="exceptionForm.date" /></div>
+              <div class="field"><label for="ex-avail">Available that day?</label>
+                <select id="ex-avail" x-model="exceptionForm.isAvailable">
                   <option :value="false">No — blocked</option>
                   <option :value="true">Yes — open (set hours below)</option>
                 </select>
               </div>
             </div>
             <div class="field-grid" x-show="exceptionForm.isAvailable">
-              <div class="field"><label>Start</label><input type="time" x-model="exceptionForm.startTime" /></div>
-              <div class="field"><label>End</label><input type="time" x-model="exceptionForm.endTime" /></div>
+              <div class="field"><label for="ex-start">Start</label><input id="ex-start" type="time" x-model="exceptionForm.startTime" /></div>
+              <div class="field"><label for="ex-end">End</label><input id="ex-end" type="time" x-model="exceptionForm.endTime" /></div>
             </div>
             <button class="btn" @click="addException">Add exception</button>
           </div>
@@ -500,29 +499,29 @@
           <div class="card">
             <h3 x-text="editingListingId ? 'Edit listing' : 'Add a listing'"></h3>
             <div class="field-grid">
-              <div class="field"><label>Title</label><input x-model="listingForm.title" /></div>
-              <div class="field"><label>Type</label>
-                <select x-model="listingForm.listingType">
+              <div class="field"><label for="l-title">Title</label><input id="l-title" x-model="listingForm.title" /></div>
+              <div class="field"><label for="l-type">Type</label>
+                <select id="l-type" x-model="listingForm.listingType">
                   <option value="sale">For sale</option>
                   <option value="rent">For rent</option>
                 </select>
               </div>
             </div>
             <div class="field-grid">
-              <div class="field"><label>Price (whole units)</label><input type="number" x-model="listingForm.priceMinor" /></div>
-              <div class="field"><label>Location</label><input x-model="listingForm.location" /></div>
+              <div class="field"><label for="l-price">Price (whole units)</label><input id="l-price" type="number" x-model="listingForm.priceMinor" /></div>
+              <div class="field"><label for="l-location">Location</label><input id="l-location" x-model="listingForm.location" /></div>
             </div>
             <div class="field-grid">
-              <div class="field"><label>Bedrooms</label><input type="number" x-model="listingForm.bedrooms" /></div>
-              <div class="field"><label>Bathrooms</label><input type="number" x-model="listingForm.bathrooms" /></div>
+              <div class="field"><label for="l-bedrooms">Bedrooms</label><input id="l-bedrooms" type="number" x-model="listingForm.bedrooms" /></div>
+              <div class="field"><label for="l-bathrooms">Bathrooms</label><input id="l-bathrooms" type="number" x-model="listingForm.bathrooms" /></div>
             </div>
             <div class="field-grid">
-              <div class="field"><label>Area (sqm)</label><input type="number" x-model="listingForm.areaSqm" /></div>
-              <div class="field"><label>Description</label><input x-model="listingForm.description" /></div>
+              <div class="field"><label for="l-area">Area (sqm)</label><input id="l-area" type="number" x-model="listingForm.areaSqm" /></div>
+              <div class="field"><label for="l-desc">Description</label><input id="l-desc" x-model="listingForm.description" /></div>
             </div>
             <div class="field">
-              <label>Deposit to reserve (leave blank for no deposit)</label>
-              <input type="number" x-model="listingForm.depositAmountMinor" placeholder="e.g. 200000" />
+              <label for="l-deposit">Deposit to reserve (leave blank for no deposit)</label>
+              <input id="l-deposit" type="number" x-model="listingForm.depositAmountMinor" placeholder="e.g. 200000" />
               <p class="hint">If set, customers see a "Pay deposit to reserve" option on this listing instead of just an inquiry form.</p>
             </div>
             <p class="error-text" x-show="listingError" x-text="listingError"></p>
@@ -539,9 +538,9 @@
                 <div class="photo-thumb">
                   <img :src="'/media/' + photo.storage_path">
                   <div class="photo-actions">
-                    <button type="button" class="row-actions" @click="moveListingPhoto(idx, -1)" :disabled="idx === 0">&uarr;</button>
-                    <button type="button" class="row-actions" @click="moveListingPhoto(idx, 1)" :disabled="idx === listingPhotos.length - 1">&darr;</button>
-                    <button type="button" class="row-actions danger" @click="deleteListingPhoto(photo.id)">&times;</button>
+                    <button type="button" class="row-actions" aria-label="Move photo earlier" @click="moveListingPhoto(idx, -1)" :disabled="idx === 0">&uarr;</button>
+                    <button type="button" class="row-actions" aria-label="Move photo later" @click="moveListingPhoto(idx, 1)" :disabled="idx === listingPhotos.length - 1">&darr;</button>
+                    <button type="button" class="row-actions danger" aria-label="Delete photo" @click="deleteListingPhoto(photo.id)">&times;</button>
                   </div>
                 </div>
               </template>
@@ -656,21 +655,21 @@
             <h3 style="margin-top:0;">Stripe</h3>
             <p class="hint" style="margin-top:0;">Paste your Stripe API keys here. Get them from your Stripe Dashboard → Developers → API keys.</p>
             <div class="field-grid">
-              <div class="field"><label>Publishable key</label><input x-model="stripeForm.publishableKey" placeholder="pk_test_..." /></div>
-              <div class="field"><label>Secret key</label><input type="password" x-model="stripeForm.secretKey" :placeholder="stripeStatus.has_secret_key ? 'Already set — leave blank to keep it' : 'sk_test_...'" /></div>
+              <div class="field"><label for="stripe-pk">Publishable key</label><input id="stripe-pk" x-model="stripeForm.publishableKey" placeholder="pk_test_..." /></div>
+              <div class="field"><label for="stripe-sk">Secret key</label><input id="stripe-sk" type="password" x-model="stripeForm.secretKey" :placeholder="stripeStatus.has_secret_key ? 'Already set — leave blank to keep it' : 'sk_test_...'" /></div>
             </div>
             <div class="field-grid">
-              <div class="field"><label>Webhook signing secret</label><input type="password" x-model="stripeForm.webhookSecret" :placeholder="stripeStatus.has_webhook_secret ? 'Already set — leave blank to keep it' : 'whsec_...'" /></div>
-              <div class="field"><label>Mode</label>
-                <select x-model="stripeForm.mode">
+              <div class="field"><label for="stripe-whsec">Webhook signing secret</label><input id="stripe-whsec" type="password" x-model="stripeForm.webhookSecret" :placeholder="stripeStatus.has_webhook_secret ? 'Already set — leave blank to keep it' : 'whsec_...'" /></div>
+              <div class="field"><label for="stripe-mode">Mode</label>
+                <select id="stripe-mode" x-model="stripeForm.mode">
                   <option value="test">Test</option>
                   <option value="live">Live</option>
                 </select>
               </div>
             </div>
             <div class="field">
-              <label>Your webhook URL (paste this into your Stripe Dashboard → Developers → Webhooks)</label>
-              <input readonly :value="stripeStatus.webhookUrl" onclick="this.select()" />
+              <label for="stripe-webhook-url">Your webhook URL (paste this into your Stripe Dashboard → Developers → Webhooks)</label>
+              <input id="stripe-webhook-url" readonly :value="stripeStatus.webhookUrl" onclick="this.select()" />
             </div>
             <div class="cluster">
               <button class="btn" @click="saveStripeCredentials(true)" :disabled="stripeSaving">Save &amp; enable</button>
@@ -729,7 +728,7 @@
 
             <!-- input + action cluster -->
             <div class="field">
-              <label>Your domain</label>
+              <label for="domain-input">Your domain</label>
               <div class="cluster">
                 <input id="domain-input" x-model="domainInput" placeholder="shop.yourbrand.com"
                        class="flex-1"
