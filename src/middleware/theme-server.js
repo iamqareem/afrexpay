@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 afrexpay
 // src/middleware/theme-server.js
 // One process serves many tenants, and tenants can be on different themes —
 // this picks the right static bundle per request instead of one fixed

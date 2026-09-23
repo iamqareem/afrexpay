@@ -11,4 +11,5 @@ themes/*/node_modules/
 *.swo
 *.kate-swp
 *~
-themes/*/node_modules/
+afrexpay-fixed/
+repo-gitlab-key.txt

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 afrexpay
 // src/server.js — entry point only. All logic lives in app.js and the modules.
 require("dotenv").config();
 

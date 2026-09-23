@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 afrexpay
 // src/middleware/tenant-resolver.js
 // Resolves which merchant this request is for, from the subdomain — this is
 // the piece that replaces the old CLIENT_SLUG env var. One running process,
@@ -107,7 +109,9 @@ async function tenantResolver(req, res, next) {
   // detection entirely. This bypasses the cache on purpose — a developer
   // testing multiple tenants against the same running process via this
   // override should never see a stale cached value from a moment ago.
-  if (req.query.tenant) {
+  // Disabled in production — otherwise any caller can create orders/
+  // inquiries under any tenant by guessing ?tenant=slug.
+  if (process.env.NODE_ENV !== "production" && req.query.tenant) {
     const slug = req.query.tenant;
     try {
       const tenant = await fetchTenant(slug);

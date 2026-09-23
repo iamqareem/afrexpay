@@ -96,19 +96,18 @@ async function getAvailableSlots(tenantId, serviceId, dateStr) {
   );
   const exception = exceptionResult.rows[0];
 
-  let windowStart, windowEnd;
+  let windows;
   if (exception) {
     if (!exception.is_available) return { slots: [] }; // explicit blackout day
-    windowStart = exception.start_time;
-    windowEnd = exception.end_time;
+    if (!exception.start_time || !exception.end_time) return { slots: [] };
+    windows = [{ start: exception.start_time, end: exception.end_time }];
   } else {
     const windowResult = await pool.query(
-      `SELECT start_time, end_time FROM availability_windows WHERE tenant_id = $1 AND day_of_week = $2 ORDER BY start_time LIMIT 1`,
+      `SELECT start_time, end_time FROM availability_windows WHERE tenant_id = $1 AND day_of_week = $2 ORDER BY start_time`,
       [tenantId, dayOfWeek]
     );
     if (windowResult.rows.length === 0) return { slots: [] }; // no recurring hours set for this weekday
-    windowStart = windowResult.rows[0].start_time;
-    windowEnd = windowResult.rows[0].end_time;
+    windows = windowResult.rows.map((r) => ({ start: r.start_time, end: r.end_time }));
   }
 
   // Existing bookings that day, for conflict-checking against candidate slots.
@@ -121,23 +120,28 @@ async function getAvailableSlots(tenantId, serviceId, dateStr) {
   const bookedRanges = bookingsResult.rows.map((r) => r.time_range);
 
   const durationMs = service.duration_minutes * 60 * 1000;
-  const [wsH, wsM] = windowStart.split(":").map(Number);
-  const [weH, weM] = windowEnd.split(":").map(Number);
-
   const dayStart = new Date(`${dateStr}T00:00:00Z`);
-  const slotStart0 = new Date(dayStart.getTime() + (wsH * 60 + wsM) * 60000);
-  const windowEndTime = new Date(dayStart.getTime() + (weH * 60 + weM) * 60000);
 
   const slots = [];
-  let cursor = new Date(slotStart0);
-  while (cursor.getTime() + durationMs <= windowEndTime.getTime()) {
-    const slotEnd = new Date(cursor.getTime() + durationMs);
-    const overlapsExisting = bookedRanges.some((rangeStr) => rangesOverlap(rangeStr, cursor, slotEnd));
-    if (!overlapsExisting) {
-      slots.push({ start: cursor.toISOString(), end: slotEnd.toISOString() });
+  for (const w of windows) {
+    if (!w.start || !w.end) continue;
+    const [wsH, wsM] = w.start.split(":").map(Number);
+    const [weH, weM] = w.end.split(":").map(Number);
+    if ([wsH, wsM, weH, weM].some((n) => Number.isNaN(n))) continue;
+    const slotStart0 = new Date(dayStart.getTime() + (wsH * 60 + wsM) * 60000);
+    const windowEndTime = new Date(dayStart.getTime() + (weH * 60 + weM) * 60000);
+    if (windowEndTime <= slotStart0) continue;
+    let cursor = new Date(slotStart0);
+    while (cursor.getTime() + durationMs <= windowEndTime.getTime()) {
+      const slotEnd = new Date(cursor.getTime() + durationMs);
+      const overlapsExisting = bookedRanges.some((rangeStr) => rangesOverlap(rangeStr, cursor, slotEnd));
+      if (!overlapsExisting) {
+        slots.push({ start: cursor.toISOString(), end: slotEnd.toISOString() });
+      }
+      cursor = slotEnd; // back-to-back slots at the service's own duration granularity
     }
-    cursor = slotEnd; // back-to-back slots at the service's own duration granularity
   }
+  slots.sort((a, b) => new Date(a.start) - new Date(b.start));
 
   return { slots };
 }

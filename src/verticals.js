@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 afrexpay
 // src/verticals.js
 //
 // A small, explicit registry of the business shapes and theme mappings this platform supports

@@ -6,12 +6,16 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "pm2": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop afrexpay",
+    "pm2:restart": "pm2 restart afrexpay",
+    "pm2:logs": "pm2 logs afrexpay",
     "migrate:up": "node-pg-migrate up",
     "migrate:down": "node-pg-migrate down",
     "migrate:create": "node-pg-migrate create",
     "test": "node --test test/*.test.js tests/*.test.js"
   },
-  "license": "ISC",
+  "license": "AGPL-3.0-only",
   "dependencies": {
     "@paypal/checkout-server-sdk": "^1.0.3",
     "bcryptjs": "^3.0.3",

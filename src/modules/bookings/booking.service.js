@@ -23,6 +23,68 @@ async function createBooking(tenantId, { serviceId, customerName, phone, notes, 
   }
   const end = new Date(start.getTime() + service.duration_minutes * 60000);
 
+  // ---- Availability window enforcement: slot must sit inside merchant's
+  // working hours for that date and align to the service's duration grid.
+  // Previously this check only lived in GET /availability/slots (UI helper),
+  // so a direct POST /api/bookings could book 02:00 outside hours.
+  {
+    const dateStr = start.toISOString().slice(0, 10); // YYYY-MM-DD in UTC
+    const dayOfWeek = start.getUTCDay();
+
+    const exRes = await pool.query(
+      `SELECT is_available, start_time, end_time FROM availability_exceptions WHERE tenant_id = $1 AND date = $2`,
+      [tenantId, dateStr]
+    );
+    const ex = exRes.rows[0];
+    let windows;
+    if (ex) {
+      if (!ex.is_available) {
+        throw Object.assign(new Error("This store is closed on the selected date."), { status: 400 });
+      }
+      if (!ex.start_time || !ex.end_time) {
+        throw Object.assign(new Error("Working hours not configured for the selected date."), { status: 400 });
+      }
+      windows = [{ start: ex.start_time, end: ex.end_time }];
+    } else {
+      const winRes = await pool.query(
+        `SELECT start_time, end_time FROM availability_windows WHERE tenant_id = $1 AND day_of_week = $2 ORDER BY start_time`,
+        [tenantId, dayOfWeek]
+      );
+      if (winRes.rows.length === 0) {
+        throw Object.assign(new Error("This store is closed on the selected day."), { status: 400 });
+      }
+      windows = winRes.rows.map((r) => ({ start: r.start_time, end: r.end_time }));
+    }
+
+    const duration = service.duration_minutes;
+    const dayStartUtc = new Date(`${dateStr}T00:00:00Z`);
+    const slotStartMin = Math.round((start.getTime() - dayStartUtc.getTime()) / 60000);
+    const slotEndMin = Math.round((end.getTime() - dayStartUtc.getTime()) / 60000);
+
+    let insideAnyWindow = false;
+    let aligned = false;
+    for (const w of windows) {
+      if (!w.start || !w.end) continue;
+      const [wsH, wsM] = w.start.split(":").map(Number);
+      const [weH, weM] = w.end.split(":").map(Number);
+      if ([wsH, wsM, weH, weM].some((n) => Number.isNaN(n))) continue;
+      const winStartMin = wsH * 60 + wsM;
+      const winEndMin = weH * 60 + weM;
+      if (winEndMin <= winStartMin) continue;
+      if (slotStartMin >= winStartMin && slotEndMin <= winEndMin) {
+        insideAnyWindow = true;
+        if ((slotStartMin - winStartMin) % duration === 0) aligned = true;
+        break;
+      }
+    }
+    if (!insideAnyWindow) {
+      throw Object.assign(new Error("Requested time is outside working hours."), { status: 400 });
+    }
+    if (!aligned) {
+      throw Object.assign(new Error(`Time must align to ${duration}-minute slots from window start.`), { status: 400 });
+    }
+  }
+
   try {
     const { rows } = await pool.query(
       `INSERT INTO bookings (tenant_id, service_id, customer_name, phone, notes, price_minor, currency, time_range)
@@ -73,6 +135,7 @@ async function updateBookingStatus(tenantId, bookingId, status) {
 const { getProvider } = require("../payments/providers");
 const { getDecryptedCredentials } = require("../payments/credentials.service");
 const { buildStripeLineItems } = require("../payments/stripe-checkout-helpers");
+const { savePayPalOrderContext } = require("../payments/paypal-context.service");
 
 async function startBookingCheckout(tenantId, bookingId, { successUrl, cancelUrl, provider = "stripe" }) {
   const credentials = await getDecryptedCredentials(tenantId, provider);
@@ -103,6 +166,7 @@ async function startBookingCheckout(tenantId, bookingId, { successUrl, cancelUrl
   const { checkoutUrl, sessionId } = await paymentProvider.createCheckoutSession({
     ...credentials,
     lineItems,
+    amountMinor: booking.price_minor,
     currency: booking.currency,
     successUrl,
     cancelUrl,
@@ -114,15 +178,22 @@ async function startBookingCheckout(tenantId, bookingId, { successUrl, cancelUrl
     },
   });
 
+  if (provider === "paypal") {
+    await savePayPalOrderContext(sessionId, tenantId, "booking", booking.id);
+  }
+
   const sessionIdField = provider === "paypal" ? "paypal_checkout_session_id" : "stripe_checkout_session_id";
+  if (!["stripe_checkout_session_id", "paypal_checkout_session_id"].includes(sessionIdField)) {
+    throw Object.assign(new Error("Invalid provider session field."), { status: 400 });
+  }
   await pool.query(
-    `UPDATE bookings SET ${sessionIdField} = $2, payment_status = 'pending' WHERE id = $1`,
-    [booking.id, sessionId]
+    `UPDATE bookings SET ${sessionIdField} = $2, payment_status = 'pending' WHERE tenant_id = $3 AND id = $1`,
+    [booking.id, sessionId, tenantId]
   );
   return { checkoutUrl };
 }
 
-async function markBookingPaid(tenantId, sessionId, amountMinor, currency, provider = "stripe") {
+async function markBookingPaid(tenantId, sessionId, amountMinor, currency, provider = "stripe", providerRef = null) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -140,10 +211,22 @@ async function markBookingPaid(tenantId, sessionId, amountMinor, currency, provi
       return null;
     }
 
+    if (!amountMinor || amountMinor < booking.price_minor) {
+      await client.query("ROLLBACK");
+      console.error(`Booking ${booking.id} underpaid: expected ${booking.price_minor} ${booking.currency}, got ${amountMinor} ${currency}`);
+      return null;
+    }
+    if (currency && booking.currency && currency.toUpperCase() !== booking.currency.toUpperCase()) {
+      await client.query("ROLLBACK");
+      console.error(`Booking ${booking.id} currency mismatch: expected ${booking.currency}, got ${currency}`);
+      return null;
+    }
+
+    const ref = providerRef || sessionId;
     await client.query(
       `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
        VALUES ($1, 'booking', $2, $3, $4, $5, $6, 'succeeded')`,
-      [tenantId, booking.id, provider, sessionId, amountMinor, currency]
+      [tenantId, booking.id, provider, ref, amountMinor, currency]
     );
 
     await client.query("COMMIT");

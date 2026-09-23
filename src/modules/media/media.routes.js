@@ -54,6 +54,11 @@ function matchesMagicNumber(buffer, mimeType) {
   return true;
 }
 
+// Extension is derived from the validated mimetype, not the attacker-
+// controlled originalname — otherwise evil.html with image/webp bytes
+// would be stored as .html and served as text/html same-origin (XSS).
+const EXT_BY_MIME = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp" };
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const dir = path.join(MEDIA_DIR, req.tenant.id);
@@ -61,9 +66,7 @@ const storage = multer.diskStorage({
     cb(null, dir);
   },
   filename: (req, file, cb) => {
-    // Random filename, not the uploaded name — avoids path traversal and
-    // collisions, and merchants never need to think about filenames anyway.
-    const ext = path.extname(file.originalname).toLowerCase() || "";
+    const ext = EXT_BY_MIME[file.mimetype] || "";
     cb(null, `${crypto.randomUUID()}${ext}`);
   },
 });
@@ -146,6 +149,7 @@ router.post("/", authRequired, (req, res) => {
 
       res.status(201).json({ id: media.id, filename: req.file.filename });
     } catch (dbErr) {
+      try { fs.unlinkSync(req.file.path); } catch {}
       console.error("Media record failed:", dbErr);
       res.status(500).json({ error: "Upload saved but could not be recorded. Try again." });
     }

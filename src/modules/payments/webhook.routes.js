@@ -77,24 +77,22 @@ async function handlePayPalWebhook(req, res) {
   let event;
   try {
     const paypalProvider = require("./providers/paypal.provider");
-    event = paypalProvider.verifyWebhook({
+    event = await paypalProvider.verifyWebhook({
       payload: req.body.toString("utf8"),
       headers: req.headers,
       webhookSecret: credentials.webhookSecret,
+      clientId: credentials.publishableKey,
+      clientSecret: credentials.secretKey,
+      mode: credentials.mode,
     });
   } catch (err) {
     console.error("PayPal webhook signature verification failed:", err.message);
     return res.status(400).json({ error: "Invalid signature." });
   }
 
-  // PayPal sends various event types; we care about completed captures
-  const relevantTypes = [
-    "CHECKOUT.ORDER.APPROVED",
-    "PAYMENT.CAPTURE.COMPLETED",
-    "PAYMENT.CAPTURE.DENIED",
-    "PAYMENT.CAPTURE.REFUNDED",
-    "PAYMENT.CAPTURE.PENDING",
-  ];
+  // Only completed captures confirm payment. DENIED/REFUNDED/PENDING must
+  // not mark an order paid; APPROVED alone is not a capture either.
+  const relevantTypes = ["CHECKOUT.ORDER.COMPLETED", "PAYMENT.CAPTURE.COMPLETED"];
 
   if (!relevantTypes.includes(event.event_type)) {
     return res.status(200).json({ received: true });
@@ -167,33 +165,76 @@ async function processPaymentEvent(tenantId, provider, event, res) {
         }
       }
     } else if (provider === "paypal") {
-      // For PayPal, we need to determine entity type from the order ID
-      // The order ID format could encode the entity type, or we check all
-      // For now, we'll check the PayPal order metadata or try each type
-      const normalizedPayment = require("./providers/paypal.provider").normalizePayment(event);
-      const { providerRef, amountMinor, currency } = normalizedPayment;
-      const orderId = event.resource?.id || event.resource?.supplementary_data?.related_ids?.order_id;
+      const paypalProvider = require("./providers/paypal.provider");
+      const normalizedPayment = paypalProvider.normalizePayment(event);
+      const { orderId, captureId, providerRef, amountMinor, currency } = normalizedPayment;
 
-      // Try each entity type with the provider reference
-      // The webhook will only match one because of the unique session ID per entity
-      paidItem = await markOrderPaid(tenantId, providerRef, amountMinor, currency, "paypal");
-      if (!paidItem) {
-        paidItem = await markBookingPaid(tenantId, providerRef, amountMinor, currency, "paypal");
-      }
-      if (!paidItem) {
-        paidItem = await markReservationPaid(tenantId, providerRef, amountMinor, currency, "paypal");
-      }
+      const { getPayPalOrderContext } = require("./paypal-context.service");
+      const context = await getPayPalOrderContext(orderId);
 
-      if (paidItem) {
-        notifyPayload = {
-          id: paidItem.id,
-          customerName: paidItem.customer_name || paidItem.name,
-          phone: paidItem.phone,
-          address: paidItem.address || "PayPal Payment",
-          totalMinor: amountMinor,
-          currency,
-          items: [{ name: "PayPal Payment", size: "—", qty: 1, unitPriceMinor: amountMinor }],
-        };
+      const entityType = context?.entity_type;
+      const targetTenantId = context?.tenant_id || tenantId;
+
+      if (entityType === "order") {
+        paidItem = await markOrderPaid(targetTenantId, orderId, amountMinor, currency, "paypal", providerRef);
+        if (paidItem) {
+          notifyPayload = {
+            id: paidItem.id,
+            customerName: paidItem.customer_name,
+            phone: paidItem.phone,
+            address: paidItem.address,
+            totalMinor: amountMinor,
+            currency,
+            items: [{ name: "Product Order (PayPal Paid)", size: "—", qty: 1, unitPriceMinor: amountMinor }],
+          };
+        }
+      } else if (entityType === "booking") {
+        paidItem = await markBookingPaid(targetTenantId, orderId, amountMinor, currency, "paypal", providerRef);
+        if (paidItem) {
+          notifyPayload = {
+            id: paidItem.id,
+            customerName: paidItem.customer_name,
+            phone: paidItem.phone,
+            address: "Service Booking (PayPal Paid)",
+            totalMinor: amountMinor,
+            currency,
+            items: [{ name: "Service Appointment", size: "—", qty: 1, unitPriceMinor: amountMinor }],
+          };
+        }
+      } else if (entityType === "listing_reservation") {
+        paidItem = await markReservationPaid(targetTenantId, orderId, amountMinor, currency, "paypal", providerRef);
+        if (paidItem) {
+          notifyPayload = {
+            id: paidItem.id,
+            customerName: paidItem.name,
+            phone: paidItem.phone,
+            address: "Listing Reservation Deposit Paid",
+            totalMinor: amountMinor,
+            currency,
+            items: [{ name: "Reservation Deposit", size: "—", qty: 1, unitPriceMinor: amountMinor }],
+          };
+        }
+      } else {
+        // Fallback if context is not present (e.g. testing or legacy)
+        paidItem = await markOrderPaid(targetTenantId, orderId, amountMinor, currency, "paypal", providerRef);
+        if (!paidItem) {
+          paidItem = await markBookingPaid(targetTenantId, orderId, amountMinor, currency, "paypal", providerRef);
+        }
+        if (!paidItem) {
+          paidItem = await markReservationPaid(targetTenantId, orderId, amountMinor, currency, "paypal", providerRef);
+        }
+
+        if (paidItem) {
+          notifyPayload = {
+            id: paidItem.id,
+            customerName: paidItem.customer_name || paidItem.name,
+            phone: paidItem.phone,
+            address: paidItem.address || "PayPal Payment",
+            totalMinor: amountMinor,
+            currency,
+            items: [{ name: "PayPal Payment", size: "—", qty: 1, unitPriceMinor: amountMinor }],
+          };
+        }
       }
     }
 

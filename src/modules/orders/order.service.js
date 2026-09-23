@@ -100,6 +100,7 @@ async function createOrder(tenantId, { customerName, phone, address, deliveryNot
 const { getProvider } = require("../payments/providers");
 const { getDecryptedCredentials } = require("../payments/credentials.service");
 const { buildStripeLineItems } = require("../payments/stripe-checkout-helpers");
+const { savePayPalOrderContext } = require("../payments/paypal-context.service");
 
 async function startOrderCheckout(tenantId, orderId, { successUrl, cancelUrl, provider = "stripe" }) {
   const credentials = await getDecryptedCredentials(tenantId, provider);
@@ -129,6 +130,7 @@ async function startOrderCheckout(tenantId, orderId, { successUrl, cancelUrl, pr
   const { checkoutUrl, sessionId } = await paymentProvider.createCheckoutSession({
     ...credentials,
     lineItems,
+    amountMinor: order.total_minor,
     currency: order.currency,
     successUrl,
     cancelUrl,
@@ -140,15 +142,22 @@ async function startOrderCheckout(tenantId, orderId, { successUrl, cancelUrl, pr
     },
   });
 
+  if (provider === "paypal") {
+    await savePayPalOrderContext(sessionId, tenantId, "order", order.id);
+  }
+
   const sessionIdField = provider === "paypal" ? "paypal_checkout_session_id" : "stripe_checkout_session_id";
+  if (!["stripe_checkout_session_id", "paypal_checkout_session_id"].includes(sessionIdField)) {
+    throw Object.assign(new Error("Invalid provider session field."), { status: 400 });
+  }
   await pool.query(
-    `UPDATE orders SET ${sessionIdField} = $2, payment_status = 'pending' WHERE id = $1`,
-    [order.id, sessionId]
+    `UPDATE orders SET ${sessionIdField} = $2, payment_status = 'pending' WHERE tenant_id = $3 AND id = $1`,
+    [order.id, sessionId, tenantId]
   );
   return { checkoutUrl };
 }
 
-async function markOrderPaid(tenantId, sessionId, amountMinor, currency, provider = "stripe") {
+async function markOrderPaid(tenantId, sessionId, amountMinor, currency, provider = "stripe", providerRef = null) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -166,10 +175,26 @@ async function markOrderPaid(tenantId, sessionId, amountMinor, currency, provide
       return null;
     }
 
+    // Amount guard: a webhook reporting 0 or a currency mismatch must not
+    // confirm the order. Stripe amounts are authoritative; PayPal amounts
+    // come from the capture resource and could be spoofed if verification
+    // were bypassed. Fail closed.
+    if (!amountMinor || amountMinor < order.total_minor) {
+      await client.query("ROLLBACK");
+      console.error(`Order ${order.id} underpaid: expected ${order.total_minor} ${order.currency}, got ${amountMinor} ${currency}`);
+      return null;
+    }
+    if (currency && order.currency && currency.toUpperCase() !== order.currency.toUpperCase()) {
+      await client.query("ROLLBACK");
+      console.error(`Order ${order.id} currency mismatch: expected ${order.currency}, got ${currency}`);
+      return null;
+    }
+
+    const ref = providerRef || sessionId;
     await client.query(
       `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
        VALUES ($1, 'order', $2, $3, $4, $5, $6, 'succeeded')`,
-      [tenantId, order.id, provider, sessionId, amountMinor, currency]
+      [tenantId, order.id, provider, ref, amountMinor, currency]
     );
 
     await client.query("COMMIT");

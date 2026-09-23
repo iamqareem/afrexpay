@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 afrexpay
 // src/app.js — this file is the map of the system: every module's routes
 // mounted in one place. To see what the platform does, read this file.
 const express = require("express");

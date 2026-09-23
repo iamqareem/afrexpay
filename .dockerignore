@@ -8,3 +8,11 @@ postgres-data/
 .github/
 *.log
 npm-debug.log*
+*.tar.gz
+*.zip
+*.swp
+*.swo
+*.kate-swp
+*~
+afrexpay-fixed/
+repo-gitlab-key.txt

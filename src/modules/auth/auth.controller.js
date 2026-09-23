@@ -23,7 +23,13 @@ const RESERVED_SUBDOMAINS = new Set([
 // cookie to .afrexpay.com fixes that. Localhost doesn't support subdomain
 // cookie scoping the same way, so dev just uses a host-only cookie.
 function cookieOptions() {
-  const opts = { httpOnly: true, sameSite: "lax", path: "/", maxAge: 7 * 24 * 3600 * 1000 };
+  const opts = {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 7 * 24 * 3600 * 1000,
+    secure: process.env.NODE_ENV === "production",
+  };
   if (!BASE_DOMAIN.includes("localhost")) {
     opts.domain = `.${BASE_DOMAIN}`;
   }
@@ -107,7 +113,16 @@ async function login(req, res) {
 
 function logout(req, res) {
   const opts = cookieOptions();
-  res.clearCookie("afrexpay_session", { domain: opts.domain }).status(204).send();
+  // clearCookie must use the same path/domain/sameSite/secure as the
+  // original set, otherwise the browser keeps the stale cookie and the
+  // session silently survives the logout.
+  res.clearCookie("afrexpay_session", {
+    path: opts.path,
+    domain: opts.domain,
+    sameSite: opts.sameSite,
+    secure: opts.secure,
+    httpOnly: opts.httpOnly,
+  }).status(204).send();
 }
 
 async function requestPasswordReset(req, res) {

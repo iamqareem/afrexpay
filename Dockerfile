@@ -5,6 +5,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
+COPY LICENSE ./LICENSE
 COPY src ./src
 COPY migrations ./migrations
 # Static bundles the server serves at runtime: dashboard, marketing pages,

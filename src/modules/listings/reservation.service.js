@@ -27,6 +27,8 @@ async function createReservation(tenantId, { listingId, name, phone, message }) 
 
 // Creates the Checkout session for an existing pending reservation
 // and stores the session id for later webhook correlation. Separate from
+const { savePayPalOrderContext } = require("../payments/paypal-context.service");
+
 // createReservation so a customer who abandons checkout and comes back
 // doesn't need a new reservation row — same reservation, a fresh session.
 async function startCheckout(tenantId, reservationId, { successUrl, cancelUrl, provider = "stripe" }) {
@@ -61,8 +63,15 @@ async function startCheckout(tenantId, reservationId, { successUrl, cancelUrl, p
     },
   });
 
+  if (provider === "paypal") {
+    await savePayPalOrderContext(sessionId, tenantId, "listing_reservation", reservation.id);
+  }
+
   const sessionIdField = provider === "paypal" ? "paypal_checkout_session_id" : "stripe_checkout_session_id";
-  await pool.query(`UPDATE listing_reservations SET ${sessionIdField} = $2 WHERE id = $1`, [reservationId, sessionId]);
+  if (!["stripe_checkout_session_id", "paypal_checkout_session_id"].includes(sessionIdField)) {
+    throw Object.assign(new Error("Invalid provider session field."), { status: 400 });
+  }
+  await pool.query(`UPDATE listing_reservations SET ${sessionIdField} = $2 WHERE tenant_id = $3 AND id = $1`, [reservationId, sessionId, tenantId]);
   return { checkoutUrl };
 }
 
@@ -72,7 +81,7 @@ async function startCheckout(tenantId, reservationId, { successUrl, cancelUrl, p
 // delivery (Stripe does not guarantee exactly-once) fails the INSERT
 // harmlessly rather than double-recording the payment or double-marking
 // the reservation paid — caught and ignored by the caller.
-async function markReservationPaid(tenantId, sessionId, amountMinor, currency, provider = "stripe") {
+async function markReservationPaid(tenantId, sessionId, amountMinor, currency, provider = "stripe", providerRef = null) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -93,10 +102,29 @@ async function markReservationPaid(tenantId, sessionId, amountMinor, currency, p
       return null;
     }
 
+    // Fetch expected deposit for amount guard (reservation row has listing_id)
+    const listingRows = await client.query(
+      `SELECT deposit_amount_minor, currency FROM listings WHERE tenant_id = $1 AND id = $2`,
+      [tenantId, reservation.listing_id]
+    );
+    const expectedAmount = listingRows.rows[0]?.deposit_amount_minor;
+    const expectedCurrency = listingRows.rows[0]?.currency;
+    if (!amountMinor || (expectedAmount && amountMinor < expectedAmount)) {
+      await client.query("ROLLBACK");
+      console.error(`Reservation ${reservation.id} underpaid: expected ${expectedAmount} ${expectedCurrency}, got ${amountMinor} ${currency}`);
+      return null;
+    }
+    if (currency && expectedCurrency && currency.toUpperCase() !== expectedCurrency.toUpperCase()) {
+      await client.query("ROLLBACK");
+      console.error(`Reservation ${reservation.id} currency mismatch: expected ${expectedCurrency}, got ${currency}`);
+      return null;
+    }
+
+    const ref = providerRef || sessionId;
     await client.query(
       `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
        VALUES ($1, 'listing_reservation', $2, $3, $4, $5, $6, 'succeeded')`,
-      [tenantId, reservation.id, provider, sessionId, amountMinor, currency]
+      [tenantId, reservation.id, provider, ref, amountMinor, currency]
     );
 
     await client.query("COMMIT");
