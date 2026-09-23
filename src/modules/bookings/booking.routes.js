@@ -1,13 +1,14 @@
 // src/modules/bookings/booking.routes.js
 const express = require("express");
 const authRequired = require("../../middleware/auth-required");
-const { createBooking, listBookings, updateBookingStatus, startBookingCheckout } = require("./booking.service");
+const { publicWriteLimiter } = require("../../middleware/rate-limits");
+const { createBooking, listBookings, updateBookingStatus, startBookingCheckout, BOOKING_STATUSES } = require("./booking.service");
 const { getConfig } = require("../store-config/config.service");
 const { notifyNewOrder } = require("../notify-matrix/matrix.service");
 
 const router = express.Router();
 
-router.post("/", async (req, res) => {
+router.post("/", publicWriteLimiter, async (req, res) => {
   const { serviceId, customerName, phone, startTime } = req.body || {};
   if (!serviceId || !customerName || !phone || !startTime) {
     return res.status(400).json({ error: "serviceId, customerName, phone, and startTime are required." });
@@ -36,7 +37,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.post("/:id/checkout", async (req, res) => {
+router.post("/:id/checkout", publicWriteLimiter, async (req, res) => {
   const { successUrl, cancelUrl } = req.body || {};
   if (!successUrl || !cancelUrl) {
     return res.status(400).json({ error: "successUrl and cancelUrl are required." });
@@ -51,16 +52,16 @@ router.post("/:id/checkout", async (req, res) => {
 });
 
 router.get("/", authRequired, async (req, res) => {
-  if (req.query.status && !["pending", "confirmed", "cancelled", "completed"].includes(req.query.status)) {
-    return res.status(400).json({ error: "status must be one of: pending, confirmed, cancelled, completed." });
+  if (req.query.status && !BOOKING_STATUSES.includes(req.query.status)) {
+    return res.status(400).json({ error: `status must be one of: ${BOOKING_STATUSES.join(", ")}.` });
   }
   res.json(await listBookings(req.tenant.id, req.query));
 });
 
 router.patch("/:id", authRequired, async (req, res) => {
   const { status } = req.body || {};
-  if (!["pending", "confirmed", "cancelled", "completed"].includes(status)) {
-    return res.status(400).json({ error: "status must be one of: pending, confirmed, cancelled, completed." });
+  if (!BOOKING_STATUSES.includes(status)) {
+    return res.status(400).json({ error: `status must be one of: ${BOOKING_STATUSES.join(", ")}.` });
   }
   const updated = await updateBookingStatus(req.tenant.id, req.params.id, status);
   if (!updated) return res.status(404).json({ error: "Booking not found." });

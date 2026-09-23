@@ -1,13 +1,14 @@
 // src/modules/orders/order.routes.js
 const express = require("express");
 const authRequired = require("../../middleware/auth-required");
+const { publicWriteLimiter } = require("../../middleware/rate-limits");
 const { createOrder, listOrders, startOrderCheckout, updateOrderStatus, ORDER_STATUSES } = require("./order.service");
 const { getConfig } = require("../store-config/config.service");
 const { notifyNewOrder } = require("../notify-matrix/matrix.service");
 
 const router = express.Router();
 
-router.post("/", async (req, res) => {
+router.post("/", publicWriteLimiter, async (req, res) => {
   const { customerName, phone, address, items } = req.body || {};
   if (!customerName || !phone || !address || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "customerName, phone, address, and at least one item are required." });
@@ -25,7 +26,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.post("/:id/checkout", async (req, res) => {
+router.post("/:id/checkout", publicWriteLimiter, async (req, res) => {
   const { successUrl, cancelUrl } = req.body || {};
   if (!successUrl || !cancelUrl) {
     return res.status(400).json({ error: "successUrl and cancelUrl are required." });

@@ -1,6 +1,7 @@
 // src/modules/listings/reservation.routes.js
 const express = require("express");
 const authRequired = require("../../middleware/auth-required");
+const { publicWriteLimiter } = require("../../middleware/rate-limits");
 const { createReservation, startCheckout, listReservations } = require("./reservation.service");
 
 const router = express.Router();
@@ -8,7 +9,7 @@ const router = express.Router();
 // Public — a customer submits their details for a listing that requires a
 // deposit. This only creates the pending reservation row; no payment has
 // happened yet, no Stripe call yet.
-router.post("/", async (req, res) => {
+router.post("/", publicWriteLimiter, async (req, res) => {
   const { listingId, name, phone } = req.body || {};
   if (!listingId || !name || !phone) {
     return res.status(400).json({ error: "listingId, name, and phone are required." });
@@ -26,7 +27,7 @@ router.post("/", async (req, res) => {
 // reservation. Separate step from creation so the customer's browser can
 // be redirected to Stripe's hosted page, then back to successUrl/cancelUrl
 // on this same storefront.
-router.post("/:id/checkout", async (req, res) => {
+router.post("/:id/checkout", publicWriteLimiter, async (req, res) => {
   const { successUrl, cancelUrl } = req.body || {};
   if (!successUrl || !cancelUrl) {
     return res.status(400).json({ error: "successUrl and cancelUrl are required." });

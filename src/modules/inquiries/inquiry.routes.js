@@ -1,13 +1,14 @@
 // src/modules/inquiries/inquiry.routes.js
 const express = require("express");
 const authRequired = require("../../middleware/auth-required");
+const { publicWriteLimiter } = require("../../middleware/rate-limits");
 const { createInquiry, listInquiries } = require("./inquiry.service");
 const { getConfig } = require("../store-config/config.service");
 const { notifyNewOrder } = require("../notify-matrix/matrix.service");
 
 const router = express.Router();
 
-router.post("/", async (req, res) => {
+router.post("/", publicWriteLimiter, async (req, res) => {
   const { listingId, name, phone } = req.body || {};
   if (!listingId || !name || !phone) {
     return res.status(400).json({ error: "listingId, name, and phone are required." });

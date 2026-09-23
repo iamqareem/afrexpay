@@ -7,6 +7,36 @@ const { parseListParams, searchCondition } = require("../../lib/list-query");
 // https://www.postgresql.org/docs/current/errcodes-appendix.html
 const EXCLUSION_VIOLATION = "23P01";
 
+// Mirrors the booking_status ENUM in migrations/1751500000000_initial-schema.js.
+const BOOKING_STATUSES = ["pending", "confirmed", "cancelled", "completed"];
+
+// Pure slot-window check (no DB) — unit-tested in tests/booking-windows.test.js.
+// Minutes are offsets from UTC midnight of the booking date; windows are
+// { start: "HH:MM", end: "HH:MM" } in the same frame.
+// Returns "ok" | "outside" | "misaligned".
+function checkSlotInWindows(slotStartMin, slotEndMin, durationMinutes, windows) {
+  if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) return "outside";
+  let insideAnyWindow = false;
+  let aligned = false;
+  for (const w of windows || []) {
+    if (!w.start || !w.end) continue;
+    const [wsH, wsM] = String(w.start).split(":").map(Number);
+    const [weH, weM] = String(w.end).split(":").map(Number);
+    if ([wsH, wsM, weH, weM].some((n) => Number.isNaN(n))) continue;
+    const winStartMin = wsH * 60 + wsM;
+    const winEndMin = weH * 60 + weM;
+    if (winEndMin <= winStartMin) continue;
+    if (slotStartMin >= winStartMin && slotEndMin <= winEndMin) {
+      insideAnyWindow = true;
+      if ((slotStartMin - winStartMin) % durationMinutes === 0) aligned = true;
+      break;
+    }
+  }
+  if (!insideAnyWindow) return "outside";
+  if (!aligned) return "misaligned";
+  return "ok";
+}
+
 async function createBooking(tenantId, { serviceId, customerName, phone, notes, startTime }) {
   const serviceResult = await pool.query(
     `SELECT id, name, duration_minutes, price_minor, currency FROM services WHERE tenant_id = $1 AND id = $2 AND active = true`,
@@ -61,26 +91,11 @@ async function createBooking(tenantId, { serviceId, customerName, phone, notes, 
     const slotStartMin = Math.round((start.getTime() - dayStartUtc.getTime()) / 60000);
     const slotEndMin = Math.round((end.getTime() - dayStartUtc.getTime()) / 60000);
 
-    let insideAnyWindow = false;
-    let aligned = false;
-    for (const w of windows) {
-      if (!w.start || !w.end) continue;
-      const [wsH, wsM] = w.start.split(":").map(Number);
-      const [weH, weM] = w.end.split(":").map(Number);
-      if ([wsH, wsM, weH, weM].some((n) => Number.isNaN(n))) continue;
-      const winStartMin = wsH * 60 + wsM;
-      const winEndMin = weH * 60 + weM;
-      if (winEndMin <= winStartMin) continue;
-      if (slotStartMin >= winStartMin && slotEndMin <= winEndMin) {
-        insideAnyWindow = true;
-        if ((slotStartMin - winStartMin) % duration === 0) aligned = true;
-        break;
-      }
-    }
-    if (!insideAnyWindow) {
+    const verdict = checkSlotInWindows(slotStartMin, slotEndMin, duration, windows);
+    if (verdict === "outside") {
       throw Object.assign(new Error("Requested time is outside working hours."), { status: 400 });
     }
-    if (!aligned) {
+    if (verdict === "misaligned") {
       throw Object.assign(new Error(`Time must align to ${duration}-minute slots from window start.`), { status: 400 });
     }
   }
@@ -254,4 +269,4 @@ async function markBookingPaid(tenantId, sessionId, amountMinor, currency, provi
   }
 }
 
-module.exports = { createBooking, listBookings, updateBookingStatus, startBookingCheckout, markBookingPaid };
+module.exports = { createBooking, listBookings, updateBookingStatus, startBookingCheckout, markBookingPaid, checkSlotInWindows, BOOKING_STATUSES };
