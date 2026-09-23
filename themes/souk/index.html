@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title id="page-title">Storefront</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="min-h-screen">
+
+  <header class="sticky top-0 z-40 bg-ink/95 backdrop-blur border-b border-surface2">
+    <div class="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
+      <div class="font-display text-2xl tracking-tightest text-paper"><span id="brand-name"></span><span id="brand-accent" class="text-gold"></span></div>
+      <button id="cart-open" class="relative flex items-center gap-2 border border-surface2 rounded-full px-4 py-2 text-sm font-mono text-paper hover:border-gold transition-colors">
+        BASKET
+        <span id="cart-count" class="inline-flex items-center justify-center min-w-[1.5rem] h-6 rounded-full bg-gold text-ink text-xs font-bold px-1">0</span>
+      </button>
+    </div>
+  </header>
+
+  <section class="max-w-6xl mx-auto px-5 pt-16 pb-12 border-b border-surface2 text-center">
+    <p id="tagline" class="font-mono text-xs tracking-widest2 text-gold uppercase mb-4"></p>
+    <h1 class="font-display text-5xl md:text-7xl leading-[1.02] tracking-tightest text-paper max-w-3xl mx-auto">
+      <span id="hero-line1"></span><br/><span id="hero-line2" class="italic text-gold"></span>
+    </h1>
+    <p id="hero-subtitle" class="mt-6 max-w-xl mx-auto text-muted text-base md:text-lg"></p>
+  </section>
+
+  <section class="max-w-6xl mx-auto px-5 py-12">
+    <div class="flex items-baseline justify-between mb-6">
+      <h2 class="font-display text-2xl tracking-tightest text-paper">THE COLLECTION</h2>
+      <p id="product-count" class="font-mono text-xs text-muted"></p>
+    </div>
+    <div id="category-chips" class="flex flex-wrap gap-2 mb-8"></div>
+    <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+  </section>
+
+  <footer class="max-w-6xl mx-auto px-5 py-10 border-t border-surface2 text-center">
+    <p id="footer-text" class="font-mono text-xs text-muted"></p>
+  </footer>
+
+  <div id="cart-overlay" class="fixed inset-0 bg-black/60 z-50 hidden"></div>
+  <aside id="cart-drawer" class="fixed top-0 right-0 h-full w-full sm:w-[420px] bg-surface z-50 translate-x-full transition-transform duration-300 flex flex-col">
+    <div class="receipt-edge bg-surface"></div>
+    <div class="flex items-center justify-between px-5 py-4 border-b border-dashed border-surface2">
+      <h3 class="receipt font-bold tracking-widest2 uppercase text-paper">Your Basket</h3>
+      <button id="cart-close" class="text-muted hover:text-paper text-2xl leading-none" aria-label="Close basket">&times;</button>
+    </div>
+    <div id="cart-items" class="flex-1 overflow-y-auto px-5 py-4 receipt text-paper space-y-4"></div>
+    <div class="px-5 py-4 border-t border-dashed border-surface2 receipt">
+      <div class="flex justify-between text-paper mb-4">
+        <span>TOTAL</span>
+        <span id="cart-total" class="text-gold font-bold"></span>
+      </div>
+      <button id="checkout-open" class="w-full bg-gold text-ink font-bold py-3 rounded-full hover:bg-paper transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+        CHECKOUT
+      </button>
+    </div>
+  </aside>
+
+  <div id="checkout-overlay" class="fixed inset-0 bg-black/60 z-[60] hidden items-center justify-center px-4">
+    <div class="bg-surface border border-surface2 rounded-md max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="font-display text-xl tracking-tightest text-paper">DELIVERY DETAILS</h3>
+        <button id="checkout-close" class="text-muted hover:text-paper text-2xl leading-none" aria-label="Close checkout">&times;</button>
+      </div>
+      <form id="checkout-form" class="space-y-4">
+        <div>
+          <label class="block font-mono text-xs text-muted mb-1" for="f-name">FULL NAME</label>
+          <input id="f-name" name="customerName" required class="w-full bg-ink border border-surface2 rounded-md px-3 py-2 text-paper focus:outline-none focus:border-gold" />
+        </div>
+        <div>
+          <label class="block font-mono text-xs text-muted mb-1" for="f-phone">PHONE</label>
+          <input id="f-phone" name="phone" required class="w-full bg-ink border border-surface2 rounded-md px-3 py-2 text-paper focus:outline-none focus:border-gold" placeholder="07XXXXXXXX" />
+        </div>
+        <div>
+          <label class="block font-mono text-xs text-muted mb-1" for="f-address">DELIVERY ADDRESS</label>
+          <textarea id="f-address" name="address" required rows="2" class="w-full bg-ink border border-surface2 rounded-md px-3 py-2 text-paper focus:outline-none focus:border-gold"></textarea>
+        </div>
+        <div>
+          <label class="block font-mono text-xs text-muted mb-1" for="f-notes">NOTES (optional)</label>
+          <textarea id="f-notes" name="deliveryNotes" rows="2" class="w-full bg-ink border border-surface2 rounded-md px-3 py-2 text-paper focus:outline-none focus:border-gold"></textarea>
+        </div>
+        <p id="checkout-error" class="text-brick text-sm hidden"></p>
+        <button type="submit" id="checkout-submit" class="w-full bg-gold text-ink font-bold py-3 rounded-full hover:bg-paper transition-colors">
+          PLACE ORDER
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div id="confirm-overlay" class="fixed inset-0 bg-black/60 z-[60] hidden items-center justify-center px-4">
+    <div class="bg-surface border border-surface2 rounded-md max-w-md w-full p-6 text-center">
+      <p class="font-mono text-xs tracking-widest2 text-gold uppercase mb-2">Order Confirmed</p>
+      <h3 class="font-display text-2xl tracking-tightest text-paper mb-4">ORDER #<span id="confirm-id"></span></h3>
+      <p id="confirm-paid" class="text-gold font-bold mb-4 hidden">Payment received ✓ — shukran!</p>
+      <p class="text-muted mb-6">We'll reach out on the phone number you gave us to confirm delivery and payment.</p>
+      <p id="pay-error" class="text-brick text-sm hidden mb-4"></p>
+      <button id="pay-now" class="w-full bg-gold text-ink font-bold py-3 rounded-full hover:bg-paper transition-colors mb-3">PAY NOW WITH CARD</button>
+      <button id="confirm-close" class="w-full bg-transparent border border-surface2 text-paper font-bold py-3 rounded-full hover:border-gold transition-colors">DONE</button>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

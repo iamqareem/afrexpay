@@ -6,13 +6,4 @@ window.ThemePickerModule = {
     if (!Array.isArray(availableThemes)) return [];
     return availableThemes.filter((theme) => theme.vertical === currentVertical);
   },
-
-  getDefaultThemeForVertical(currentVertical) {
-    const defaults = {
-      products: "hangtag",
-      services: "booking-slots",
-      listings: "listing-grid",
-    };
-    return defaults[currentVertical] || "hangtag";
-  },
 };

@@ -41,6 +41,13 @@ const THEMES_REGISTRY = {
     subCategory: "Auto & Parts",
     description: "Structured parts and vehicle showcase catalog.",
   },
+  souk: {
+    id: "souk",
+    label: "Souk",
+    vertical: "products",
+    subCategory: "Fragrance & Modest Attire",
+    description: "Elegant storefront for perfumes, attars, and modest wear with category filtering.",
+  },
   "booking-slots": {
     id: "booking-slots",
     label: "Booking Slots",
@@ -75,7 +82,7 @@ const VERTICALS = {
   products: {
     label: "Physical products",
     dashboardTabs: ["products", "orders"],
-    compatibleThemes: ["hangtag", "electronics", "yeezy", "backmarket", "automobile"],
+    compatibleThemes: ["hangtag", "electronics", "yeezy", "backmarket", "automobile", "souk"],
   },
   services: {
     label: "Bookable services",

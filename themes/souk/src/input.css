@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --accent: #C9963C;
+    --accent2: #8A4B2A;
+  }
+
+  body {
+    @apply bg-ink text-paper font-body;
+  }
+}
+
+@layer components {
+  .souk-card {
+    @apply relative bg-surface border border-surface2 rounded-md overflow-hidden flex flex-col transition-transform duration-300 hover:-translate-y-1;
+  }
+
+  .souk-chip {
+    @apply font-mono text-xs tracking-widest2 uppercase px-4 py-2 rounded-full border border-surface2 text-muted cursor-pointer transition-colors hover:border-gold hover:text-paper;
+  }
+  .souk-chip.active {
+    @apply bg-gold text-ink border-gold font-bold;
+  }
+
+  .receipt {
+    @apply font-mono text-sm;
+  }
+
+  .receipt-edge {
+    height: 10px;
+    background-image: radial-gradient(circle at 8px 0, transparent 6px, #221709 7px);
+    background-size: 16px 10px;
+    background-repeat: repeat-x;
+  }
+}

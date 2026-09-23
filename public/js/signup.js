@@ -7,6 +7,7 @@ const THEMES_BY_VERTICAL = {
     { id: "yeezy", label: "Yeezy", subCategory: "Streetwear & Footwear", desc: "Bold, lifestyle-driven showcase for urban fashion." },
     { id: "backmarket", label: "BackMarket", subCategory: "Refurbished Goods", desc: "Trust-centric layout for pre-owned & certified items." },
     { id: "automobile", label: "Automobile", subCategory: "Auto & Parts", desc: "Structured catalog for vehicle parts & motors." },
+    { id: "souk", label: "Souk", subCategory: "Fragrance & Attire", desc: "Elegant storefront for perfumes, attars, and modest wear." },
   ],
   services: [
     { id: "booking-slots", label: "Booking Slots", subCategory: "Appointments", desc: "Interactive appointment scheduling with weekly availability." },
@@ -18,7 +19,6 @@ const THEMES_BY_VERTICAL = {
   ],
 };
 
-let currentWizardStep = 1;
 let selectedThemeSlug = "hangtag";
 
 function getSelectedVertical() {
@@ -62,8 +62,6 @@ function selectThemeInWizard(themeSlug) {
 }
 
 function goToStep(step) {
-  currentWizardStep = step;
-
   const heroInput = document.getElementById("hero-subdomain-input");
   const formSubdomain = document.getElementById("subdomain");
   if (heroInput && formSubdomain && heroInput.value.trim() && !formSubdomain.value.trim()) {
