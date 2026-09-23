@@ -51,7 +51,7 @@ async function verifyLogin({ email, password }) {
   const { rows } = await pool.query(
     `SELECT u.id, u.tenant_id, u.password_hash, u.role, t.subdomain
      FROM users u JOIN tenants t ON t.id = u.tenant_id
-     WHERE u.email = $1`,
+     WHERE LOWER(u.email) = LOWER($1)`,
     [email]
   );
   const user = rows[0];
@@ -77,7 +77,7 @@ const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 // match any account — the caller must respond identically either way, so a
 // bad actor can't use this endpoint to discover which emails are registered.
 async function createPasswordResetToken(email) {
-  const { rows } = await pool.query(`SELECT id FROM users WHERE email = $1`, [email]);
+  const { rows } = await pool.query(`SELECT id FROM users WHERE LOWER(email) = LOWER($1)`, [email]);
   const user = rows[0];
   if (!user) return null;
 
@@ -96,25 +96,29 @@ async function createPasswordResetToken(email) {
 
 async function resetPasswordWithToken(rawToken, newPassword) {
   const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-  const { rows } = await pool.query(
-    `SELECT id, user_id, expires_at, used_at FROM password_reset_tokens WHERE token_hash = $1`,
-    [tokenHash]
-  );
-  const record = rows[0];
-  if (!record || record.used_at || new Date(record.expires_at) < new Date()) {
-    return false;
-  }
-
   const passwordHash = await bcrypt.hash(newPassword, 10);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Atomic: claim the token only if still unused and not expired. The
+    // FOR UPDATE locks the row so concurrent POSTs with the same token
+    // cannot both succeed; the second sees used_at already set and gets 0 rows.
+    const { rows } = await client.query(
+      `UPDATE password_reset_tokens SET used_at = now()
+       WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+       RETURNING id, user_id`,
+      [tokenHash]
+    );
+    const record = rows[0];
+    if (!record) {
+      await client.query("ROLLBACK");
+      return false;
+    }
     await client.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [passwordHash, record.user_id]);
-    await client.query(`UPDATE password_reset_tokens SET used_at = now() WHERE id = $1`, [record.id]);
     await client.query("COMMIT");
     return true;
   } catch (err) {
-    await client.query("ROLLBACK");
+    try { await client.query("ROLLBACK"); } catch {}
     throw err;
   } finally {
     client.release();

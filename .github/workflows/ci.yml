@@ -29,6 +29,14 @@ jobs:
             node --check "$f" || exit 1
           done
 
+      - name: Theme CSS exists
+        run: |
+          missing=0
+          for d in themes/*/; do
+            if [ ! -f "${d}css/style.css" ]; then echo "Missing ${d}css/style.css"; missing=1; fi
+          done
+          if [ $missing -ne 0 ]; then echo "Theme CSS missing — run npm run build:css in each theme"; exit 1; fi
+
   docker:
     runs-on: ubuntu-latest
     steps:

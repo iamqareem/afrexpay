@@ -15,12 +15,12 @@ async function listListings(tenantId, params = {}) {
   const { rows } = await pool.query(
     `SELECT l.*, m.storage_path AS thumbnail_path
      FROM listings l
-     LEFT JOIN LATERAL (
-       SELECT storage_path FROM media
-       WHERE entity_type = 'listing' AND entity_id = l.id
-       ORDER BY sort_order ASC, created_at ASC
-       LIMIT 1
-     ) m ON true
+      LEFT JOIN LATERAL (
+        SELECT storage_path FROM media
+        WHERE tenant_id = l.tenant_id AND entity_type = 'listing' AND entity_id = l.id
+        ORDER BY sort_order ASC, created_at ASC
+        LIMIT 1
+      ) m ON true
      WHERE ${conditions.join(" AND ")}
      ORDER BY l.created_at ${dir}
      LIMIT $${values.length - 1} OFFSET $${values.length}`,

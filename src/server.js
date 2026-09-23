@@ -11,6 +11,10 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
   console.error("JWT_SECRET is missing or too short (need at least 16 characters). Set it in .env before starting.");
   process.exit(1);
 }
+if (!process.env.PAYMENT_ENCRYPTION_KEY || !/^[0-9a-fA-F]{64}$/.test(process.env.PAYMENT_ENCRYPTION_KEY)) {
+  console.error("PAYMENT_ENCRYPTION_KEY must be a 64-char hex string (32 bytes). Generate: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"");
+  process.exit(1);
+}
 
 const app = require("./app");
 

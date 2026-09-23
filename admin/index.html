@@ -106,21 +106,21 @@
               <p class="hint">Changes which tabs and storefront layout you get — product catalog vs. a booking calendar.</p>
             </div>
             <div class="field-grid">
-              <div class="field"><label>Store name</label><input x-model="config.storeName" /></div>
-              <div class="field"><label>Store name (accent word)</label><input x-model="config.storeNameAccent" /></div>
+              <div class="field"><label for="config-storeName">Store name</label><input id="config-storeName" x-model="config.storeName" /></div>
+              <div class="field"><label for="config-storeNameAccent">Store name (accent word)</label><input id="config-storeNameAccent" x-model="config.storeNameAccent" /></div>
             </div>
-            <div class="field"><label>Tagline</label><input x-model="config.tagline" /></div>
+            <div class="field"><label for="config-tagline">Tagline</label><input id="config-tagline" x-model="config.tagline" /></div>
             <div class="field-grid">
-              <div class="field"><label>Hero line 1</label><input x-model="config.heroTitleLine1" /></div>
-              <div class="field"><label>Hero line 2</label><input x-model="config.heroTitleLine2" /></div>
+              <div class="field"><label for="config-hero1">Hero line 1</label><input id="config-hero1" x-model="config.heroTitleLine1" /></div>
+              <div class="field"><label for="config-hero2">Hero line 2</label><input id="config-hero2" x-model="config.heroTitleLine2" /></div>
             </div>
-            <div class="field"><label>Hero subtitle</label><textarea rows="2" x-model="config.heroSubtitle"></textarea></div>
-            <div class="field"><label>Footer text</label><input x-model="config.footerText" /></div>
+            <div class="field"><label for="config-heroSubtitle">Hero subtitle</label><textarea id="config-heroSubtitle" rows="2" x-model="config.heroSubtitle"></textarea></div>
+            <div class="field"><label for="config-footer">Footer text</label><input id="config-footer" x-model="config.footerText" /></div>
             <div class="field-grid">
-              <div class="field"><label>Phone</label><input x-model="config.phone" /></div>
+              <div class="field"><label for="config-phone">Phone</label><input id="config-phone" x-model="config.phone" /></div>
               <div class="field">
-                <label>Currency</label>
-                <select x-model="config.currency">
+                <label for="config-currency">Currency</label>
+                <select id="config-currency" x-model="config.currency">
                   <option value="UGX">UGX</option>
                   <option value="KES">KES</option>
                   <option value="TZS">TZS</option>
@@ -132,7 +132,7 @@
               <label>Colors</label>
               <div class="cluster">
                 <template x-for="pair in colorPairs" :key="pair.name">
-                  <button type="button" @click="config.accentColor = pair.accent; config.accentColor2 = pair.accent2" :title="pair.name"
+                  <button type="button" @click="config.accentColor = pair.accent; config.accentColor2 = pair.accent2" :title="pair.name" :aria-label="pair.name"
                     :style="'width:36px;height:36px;border-radius:6px;border:2px solid ' + (config.accentColor === pair.accent ? 'var(--text)' : 'transparent') + '; background: linear-gradient(135deg, ' + pair.accent + ' 50%, ' + pair.accent2 + ' 50%); cursor:pointer;'">
                   </button>
                 </template>
@@ -144,7 +144,7 @@
               <p class="hint">Themes tailored for your selected business category (<strong x-text="verticals[config.vertical || 'products']?.label"></strong>).</p>
               <div class="theme-grid">
                 <template x-for="t in filteredThemes()" :key="t.id">
-                  <div class="theme-card" :class="{ active: t.id === currentTheme }" @click="setTheme(t.id)">
+                  <div class="theme-card" :class="{ active: t.id === currentTheme }" @click="setTheme(t.id)" role="button" tabindex="0" :aria-label="t.label" @keydown.enter.prevent="setTheme(t.id)" @keydown.space.prevent="setTheme(t.id)">
                     <div class="theme-card-header">
                       <strong class="theme-card-title" x-text="t.label"></strong>
                       <span class="theme-badge" x-text="t.subCategory"></span>
