@@ -49,7 +49,7 @@ async function createOrder(tenantId, { customerName, phone, address, deliveryNot
       }
 
       if (product.stock_qty !== null) {
-        await client.query(`UPDATE products SET stock_qty = stock_qty - $1 WHERE id = $2`, [qty, product.id]);
+        await client.query(`UPDATE products SET stock_qty = stock_qty - $1 WHERE id = $2 AND tenant_id = $3`, [qty, product.id, tenantId]);
       }
 
       resolvedItems.push({
@@ -165,7 +165,7 @@ async function markOrderPaid(tenantId, sessionId, amountMinor, currency, provide
     const sessionIdField = provider === "paypal" ? "paypal_checkout_session_id" : "stripe_checkout_session_id";
     const { rows } = await client.query(
       `UPDATE orders SET payment_status = 'paid', status = 'confirmed'
-       WHERE tenant_id = $1 AND ${sessionIdField} = $2
+       WHERE tenant_id = $1 AND ${sessionIdField} = $2 AND payment_status = 'pending'
        RETURNING *`,
       [tenantId, sessionId]
     );
@@ -178,15 +178,29 @@ async function markOrderPaid(tenantId, sessionId, amountMinor, currency, provide
     // Amount guard: a webhook reporting 0 or a currency mismatch must not
     // confirm the order. Stripe amounts are authoritative; PayPal amounts
     // come from the capture resource and could be spoofed if verification
-    // were bypassed. Fail closed.
+    // were bypassed. Fail closed but leave an audit trail.
     if (!amountMinor || amountMinor < order.total_minor) {
       await client.query("ROLLBACK");
       console.error(`Order ${order.id} underpaid: expected ${order.total_minor} ${order.currency}, got ${amountMinor} ${currency}`);
+      try {
+        await pool.query(
+          `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
+           VALUES ($1, 'order', $2, $3, $4, $5, $6, 'failed')`,
+          [tenantId, order.id, provider, providerRef || sessionId, amountMinor || 0, currency || order.currency]
+        );
+      } catch {}
       return null;
     }
     if (currency && order.currency && currency.toUpperCase() !== order.currency.toUpperCase()) {
       await client.query("ROLLBACK");
       console.error(`Order ${order.id} currency mismatch: expected ${order.currency}, got ${currency}`);
+      try {
+        await pool.query(
+          `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
+           VALUES ($1, 'order', $2, $3, $4, $5, $6, 'failed')`,
+          [tenantId, order.id, provider, providerRef || sessionId, amountMinor || 0, currency || order.currency]
+        );
+      } catch {}
       return null;
     }
 

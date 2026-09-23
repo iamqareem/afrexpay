@@ -112,11 +112,25 @@ async function markReservationPaid(tenantId, sessionId, amountMinor, currency, p
     if (!amountMinor || (expectedAmount && amountMinor < expectedAmount)) {
       await client.query("ROLLBACK");
       console.error(`Reservation ${reservation.id} underpaid: expected ${expectedAmount} ${expectedCurrency}, got ${amountMinor} ${currency}`);
+      try {
+        await pool.query(
+          `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
+           VALUES ($1, 'listing_reservation', $2, $3, $4, $5, $6, 'failed')`,
+          [tenantId, reservation.id, provider, providerRef || sessionId, amountMinor || 0, currency || expectedCurrency]
+        );
+      } catch {}
       return null;
     }
     if (currency && expectedCurrency && currency.toUpperCase() !== expectedCurrency.toUpperCase()) {
       await client.query("ROLLBACK");
       console.error(`Reservation ${reservation.id} currency mismatch: expected ${expectedCurrency}, got ${currency}`);
+      try {
+        await pool.query(
+          `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
+           VALUES ($1, 'listing_reservation', $2, $3, $4, $5, $6, 'failed')`,
+          [tenantId, reservation.id, provider, providerRef || sessionId, amountMinor || 0, currency || expectedCurrency]
+        );
+      } catch {}
       return null;
     }
 

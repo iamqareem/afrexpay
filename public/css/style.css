@@ -409,6 +409,27 @@ html[data-theme="dark"] .footer nav a:hover{color:var(--white)}
 html[data-theme="dark"] :focus-visible{outline-color:var(--white)}
 html[data-theme="dark"] .nav-links{background:var(--black)}
 
+/* Reset page — shares admin's utility layout but lives on public/css.
+   Minimal compat so public/reset.html works without pulling admin/css. */
+.utility-page{max-width:520px;margin:clamp(2rem,4vw,3rem) auto;padding:0 clamp(1rem,3vw,1.5rem)}
+.utility-title{font-size:clamp(1.5rem,1.2rem + 1.5vw,2rem);margin-bottom:1.25rem}
+.form-panel{margin-top:1rem}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:1rem clamp(1rem,3vw,1.5rem);border-bottom:1px solid var(--border);background:var(--surface)}
+.error-text{color:var(--text);font-weight:700;font-size:.85rem;margin:.5rem 0}
+.full-width{width:100%}
+.btn.accent{background:var(--black);color:var(--white);border-color:var(--black)}
+.password-input-group{position:relative;display:flex;align-items:center}
+.password-input-group input{padding-right:2.75rem}
+.toggle-password-btn{position:absolute;right:.6rem;background:none;border:none;color:var(--muted);cursor:pointer;padding:.35rem;display:flex;align-items:center;justify-content:center;border-radius:4px}
+.toggle-password-btn:hover{color:var(--text)}
+.eye-icon{width:18px;height:18px}
+.checklist-item{display:inline-flex;align-items:center;gap:.4rem;font-size:.76rem;font-weight:650;color:var(--muted);border:1px solid var(--border);border-radius:var(--radius-pill);padding:.25rem .65rem;background:var(--white)}
+.checklist-item.pass{color:var(--white);background:var(--black);border-color:var(--black)}
+.checklist-item::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--gray-300)}
+.checklist-item.pass::before{background:var(--white)}
+html[data-theme="dark"] .checklist-item.pass{background:var(--white);color:var(--black);border-color:var(--white)}
+html[data-theme="dark"] .checklist-item.pass::before{background:var(--black)}
+
 @media (prefers-reduced-motion:reduce){
   #verticals .spotlight-grid .card,
   #verticals .spotlight-grid:hover .card,

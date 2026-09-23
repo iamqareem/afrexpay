@@ -29,14 +29,23 @@ async function setCustomDomain(tenantId, rawDomain) {
     err.status = 400;
     throw err;
   }
-  const { rows } = await pool.query(
-    `UPDATE tenants
-       SET custom_domain = $2, custom_domain_verified_at = NULL
-     WHERE id = $1
-     RETURNING custom_domain, custom_domain_verified_at`,
-    [tenantId, domain]
-  );
-  return rows[0];
+  try {
+    const { rows } = await pool.query(
+      `UPDATE tenants
+         SET custom_domain = $2, custom_domain_verified_at = NULL
+       WHERE id = $1
+       RETURNING custom_domain, custom_domain_verified_at`,
+      [tenantId, domain]
+    );
+    return rows[0];
+  } catch (err) {
+    if (err.code === "23505") {
+      const e = new Error("That domain is already claimed by another store.");
+      e.status = 409;
+      throw e;
+    }
+    throw err;
+  }
 }
 
 async function getDomainStatus(tenantId) {

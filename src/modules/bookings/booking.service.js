@@ -201,7 +201,7 @@ async function markBookingPaid(tenantId, sessionId, amountMinor, currency, provi
     const sessionIdField = provider === "paypal" ? "paypal_checkout_session_id" : "stripe_checkout_session_id";
     const { rows } = await client.query(
       `UPDATE bookings SET payment_status = 'paid', status = 'confirmed'
-       WHERE tenant_id = $1 AND ${sessionIdField} = $2
+       WHERE tenant_id = $1 AND ${sessionIdField} = $2 AND payment_status = 'pending'
        RETURNING *`,
       [tenantId, sessionId]
     );
@@ -214,11 +214,25 @@ async function markBookingPaid(tenantId, sessionId, amountMinor, currency, provi
     if (!amountMinor || amountMinor < booking.price_minor) {
       await client.query("ROLLBACK");
       console.error(`Booking ${booking.id} underpaid: expected ${booking.price_minor} ${booking.currency}, got ${amountMinor} ${currency}`);
+      try {
+        await pool.query(
+          `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
+           VALUES ($1, 'booking', $2, $3, $4, $5, $6, 'failed')`,
+          [tenantId, booking.id, provider, providerRef || sessionId, amountMinor || 0, currency || booking.currency]
+        );
+      } catch {}
       return null;
     }
     if (currency && booking.currency && currency.toUpperCase() !== booking.currency.toUpperCase()) {
       await client.query("ROLLBACK");
       console.error(`Booking ${booking.id} currency mismatch: expected ${booking.currency}, got ${currency}`);
+      try {
+        await pool.query(
+          `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
+           VALUES ($1, 'booking', $2, $3, $4, $5, $6, 'failed')`,
+          [tenantId, booking.id, provider, providerRef || sessionId, amountMinor || 0, currency || booking.currency]
+        );
+      } catch {}
       return null;
     }
 

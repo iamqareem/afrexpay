@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "build": "tailwindcss -i ./src/input.css -o ./css/style.css",
+    "build:css": "tailwindcss -i ./src/input.css -o ./css/style.css --minify",
     "watch": "tailwindcss -i ./src/input.css -o ./css/style.css --watch"
   },
   "devDependencies": {

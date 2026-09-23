@@ -37,6 +37,15 @@ function money(minor, currency) {
   return `${currency || "UGX"} ${Number(minor).toLocaleString("en-UG")}`;
 }
 
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // Builds both a plain-text body (required by the spec, shows up in
 // notifications/clients that don't render HTML) and a formatted HTML body
 // (renders nicely in Element and similar clients).
@@ -59,15 +68,15 @@ function formatOrderMessage(storeName, order) {
   ].filter(Boolean).join("\n");
 
   const html = [
-    `<p><strong>New order — ${storeName || "your store"}</strong></p>`,
-    `<p>Order #${String(order.id).slice(0, 8)}<br/>`,
-    `Customer: ${order.customer_name || order.customerName}<br/>`,
-    `Phone: ${order.phone}<br/>`,
-    `Address: ${order.address}`,
-    order.delivery_notes || order.deliveryNotes ? `<br/>Notes: ${order.delivery_notes || order.deliveryNotes}` : "",
+    `<p><strong>New order — ${escapeHtml(storeName || "your store")}</strong></p>`,
+    `<p>Order #${escapeHtml(String(order.id).slice(0, 8))}<br/>`,
+    `Customer: ${escapeHtml(order.customer_name || order.customerName)}<br/>`,
+    `Phone: ${escapeHtml(order.phone)}<br/>`,
+    `Address: ${escapeHtml(order.address)}`,
+    order.delivery_notes || order.deliveryNotes ? `<br/>Notes: ${escapeHtml(order.delivery_notes || order.deliveryNotes)}` : "",
     `</p>`,
-    `<ul>${order.items.map((i) => `<li>${i.qty}× ${i.product_name || i.name} (${i.size}) — ${money(i.unit_price_minor ?? i.unitPriceMinor, order.currency)}</li>`).join("")}</ul>`,
-    `<p><strong>Total: ${money(order.total_minor ?? order.totalMinor, order.currency)}</strong></p>`,
+    `<ul>${order.items.map((i) => `<li>${escapeHtml(i.qty)}× ${escapeHtml(i.product_name || i.name)} (${escapeHtml(i.size)}) — ${escapeHtml(money(i.unit_price_minor ?? i.unitPriceMinor, order.currency))}</li>`).join("")}</ul>`,
+    `<p><strong>Total: ${escapeHtml(money(order.total_minor ?? order.totalMinor, order.currency))}</strong></p>`,
   ].join("");
 
   return { text, html };
