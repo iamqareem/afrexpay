@@ -78,6 +78,7 @@
       </div>
 
       <div class="tabs" role="tablist" aria-label="Dashboard sections" @keydown="tabKey($event)">
+        <button type="button" class="tab" role="tab" data-tab="home" :aria-selected="tab === 'home'" :class="{active: tab === 'home'}" @click="setTab('home')">Home</button>
         <button type="button" class="tab" role="tab" data-tab="config" :aria-selected="tab === 'config'" :class="{active: tab === 'config'}" @click="setTab('config')">Store Settings</button>
         <button type="button" class="tab" role="tab" data-tab="payments" :aria-selected="tab === 'payments'" :class="{active: tab === 'payments'}" @click="setTab('payments')">Payments</button>
         <button type="button" class="tab" role="tab" data-tab="domain" :aria-selected="tab === 'domain'" :class="{active: tab === 'domain'}" @click="setTab('domain')">Custom Domain</button>
@@ -92,6 +93,148 @@
       </div>
 
       <div class="main">
+
+        <!-- HOME -->
+        <div x-show="tab === 'home'">
+          <div class="card" x-show="homeLoading()">
+            <span class="skel" style="width:40%"></span>
+            <div style="height:0.75rem"></div>
+            <span class="skel" style="width:70%"></span>
+            <div style="height:0.75rem"></div>
+            <span class="skel" style="width:55%"></span>
+          </div>
+          <div x-show="!homeLoading()">
+            <div class="stat-grid">
+              <template x-if="tabVisible('orders')">
+                <div class="stat-card">
+                  <div class="stat-value">
+                    <template x-if="homeRevenueToday().length === 0"><span>—</span></template>
+                    <template x-for="r in homeRevenueToday()" :key="r.currency">
+                      <div x-text="money(r.total, r.currency)"></div>
+                    </template>
+                  </div>
+                  <div class="stat-label">Revenue today</div>
+                </div>
+              </template>
+              <template x-if="tabVisible('orders')">
+                <div class="stat-card">
+                  <div class="stat-value" x-text="homeOrdersToday().length"></div>
+                  <div class="stat-label">Orders today</div>
+                </div>
+              </template>
+              <template x-if="tabVisible('orders')">
+                <div class="stat-card">
+                  <div class="stat-value" x-text="homeFulfillment().length"></div>
+                  <div class="stat-label">Needs fulfillment</div>
+                </div>
+              </template>
+              <template x-if="tabVisible('products')">
+                <div class="stat-card">
+                  <div class="stat-value" x-text="homeLowStock().length"></div>
+                  <div class="stat-label">Low stock</div>
+                </div>
+              </template>
+              <template x-if="tabVisible('bookings')">
+                <div class="stat-card">
+                  <div class="stat-value" x-text="homeBookingsToday().length"></div>
+                  <div class="stat-label">Bookings today</div>
+                </div>
+              </template>
+              <template x-if="tabVisible('bookings')">
+                <div class="stat-card">
+                  <div class="stat-value" x-text="homePendingBookings().length"></div>
+                  <div class="stat-label">Pending bookings</div>
+                </div>
+              </template>
+              <template x-if="tabVisible('inquiries')">
+                <div class="stat-card">
+                  <div class="stat-value" x-text="homeNewInquiries().length"></div>
+                  <div class="stat-label">Inquiries today</div>
+                </div>
+              </template>
+              <template x-if="tabVisible('reservations')">
+                <div class="stat-card">
+                  <div class="stat-value" x-text="homePendingReservations().length"></div>
+                  <div class="stat-label">Pending reservations</div>
+                </div>
+              </template>
+            </div>
+
+            <template x-if="tabVisible('orders') && homeFulfillment().length">
+              <div class="card">
+                <h3>Needs fulfillment</h3>
+                <ul class="queue-list">
+                  <template x-for="o in homeFulfillment()" :key="o.id">
+                    <li>
+                      <span><strong x-text="o.customer_name"></strong> <span class="q-sub" x-text="new Date(o.created_at).toLocaleDateString()"></span></span>
+                      <span x-text="money(o.total_minor, o.currency)"></span>
+                    </li>
+                  </template>
+                </ul>
+                <button type="button" class="link-btn" @click="setTab('orders')">View all orders →</button>
+              </div>
+            </template>
+
+            <template x-if="tabVisible('products') && homeLowStock().length">
+              <div class="card">
+                <h3>Low stock</h3>
+                <ul class="queue-list">
+                  <template x-for="p in homeLowStock()" :key="p.id">
+                    <li>
+                      <span><strong x-text="p.name"></strong> <span class="q-sub" x-text="p.sku"></span></span>
+                      <span x-text="p.stock_qty + ' left'"></span>
+                    </li>
+                  </template>
+                </ul>
+                <button type="button" class="link-btn" @click="setTab('products')">View all products →</button>
+              </div>
+            </template>
+
+            <template x-if="tabVisible('bookings') && homePendingBookings().length">
+              <div class="card">
+                <h3>Pending bookings</h3>
+                <ul class="queue-list">
+                  <template x-for="b in homePendingBookings()" :key="b.id">
+                    <li>
+                      <span><strong x-text="b.customer_name"></strong> <span class="q-sub" x-text="b.service_name"></span></span>
+                      <span x-text="formatBookingTime(b.time_range)"></span>
+                    </li>
+                  </template>
+                </ul>
+                <button type="button" class="link-btn" @click="setTab('bookings')">View all bookings →</button>
+              </div>
+            </template>
+
+            <template x-if="tabVisible('inquiries') && homeNewInquiries().length">
+              <div class="card">
+                <h3>New inquiries</h3>
+                <ul class="queue-list">
+                  <template x-for="i in homeNewInquiries()" :key="i.id">
+                    <li>
+                      <span><strong x-text="i.name"></strong> <span class="q-sub" x-text="i.listing_title"></span></span>
+                      <span class="q-sub" x-text="i.message ? String(i.message).slice(0, 40) : ''"></span>
+                    </li>
+                  </template>
+                </ul>
+                <button type="button" class="link-btn" @click="setTab('inquiries')">View all inquiries →</button>
+              </div>
+            </template>
+
+            <template x-if="homeActivity().length">
+              <div class="card">
+                <h3>Recent activity</h3>
+                <ul class="queue-list">
+                  <template x-for="(a, idx) in homeActivity()" :key="idx">
+                    <li>
+                      <span><strong x-text="a.title"></strong> <span class="q-sub" x-text="a.sub"></span></span>
+                      <button type="button" class="link-btn" style="margin-top:0" @click="setTab(a.tab)">Open →</button>
+                    </li>
+                  </template>
+                </ul>
+              </div>
+            </template>
+          </div>
+        </div>
 
         <!-- STORE SETTINGS -->
         <div x-show="tab === 'config'">

@@ -6,7 +6,7 @@ function adminApp() {
     // ---- top-level state ----
     checkedSession: false,
     loggedIn: false,
-    tab: "config",
+    tab: "home",
     toast: null,
 
     // per-table loading flags — true until that table's first load
@@ -123,8 +123,8 @@ function adminApp() {
     // Tabs are hash-routed (#tab=orders) so refreshes and shared links
     // land on the right view. Always-visible tabs need no registry.
     tabOrder() {
-      return ["config", "payments", "domain", "products", "services", "availability", "orders", "bookings", "listings", "inquiries", "reservations"]
-        .filter((t) => t === "config" || t === "payments" || t === "domain" || this.tabVisible(t));
+      return ["home", "config", "payments", "domain", "products", "services", "availability", "orders", "bookings", "listings", "inquiries", "reservations"]
+        .filter((t) => t === "home" || t === "config" || t === "payments" || t === "domain" || this.tabVisible(t));
     },
 
     setTab(name) {
@@ -134,7 +134,7 @@ function adminApp() {
 
     readTabFromHash() {
       const m = (location.hash || "").match(/tab=([a-z-]+)/);
-      const known = ["config", "payments", "domain", "products", "services", "availability", "orders", "bookings", "listings", "inquiries", "reservations"];
+      const known = ["home", "config", "payments", "domain", "products", "services", "availability", "orders", "bookings", "listings", "inquiries", "reservations"];
       if (m && known.includes(m[1])) this.tab = m[1];
     },
 
@@ -165,8 +165,8 @@ function adminApp() {
       if (!this.loggedIn) return;
       await this.loadAll();
       // A bookmarked hash may point at a tab this vertical doesn't have.
-      if (!["config", "payments", "domain"].includes(this.tab) && !this.tabVisible(this.tab)) {
-        this.tab = "config";
+      if (!["home", "config", "payments", "domain"].includes(this.tab) && !this.tabVisible(this.tab)) {
+        this.tab = "home";
       }
     },
 
@@ -237,7 +237,7 @@ function adminApp() {
       // listings and friends survived logout and flashed stale on the
       // next login until their loaders resolved.
       this.loggedIn = false;
-      this.tab = "config";
+      this.tab = "home";
       this.config = {};
       this.products = [];
       this.orders = [];
@@ -590,6 +590,131 @@ function adminApp() {
       const f = this.filters.reservations;
       const rows = this.reservations.filter((r) => this.matchQ(r, f.q, ["name", "phone", "listing_title"]));
       return this.byNewOld(rows, f.sort, (r) => r.created_at);
+    },
+
+    // ---- home overview (read-only aggregates over loaded lists) ----
+    // All pure functions of state — no fetches — so tests/home-stats.test.js
+    // exercises them directly via require("./admin/js/app.js").adminApp().
+    LOW_STOCK_AT: 5,
+    HOME_QUEUE_CAP: 5,
+
+    sameDay(a, b) {
+      const da = a instanceof Date ? a : new Date(a);
+      const db = b instanceof Date ? b : new Date(b);
+      if (isNaN(da) || isNaN(db)) return false;
+      return da.getFullYear() === db.getFullYear() &&
+        da.getMonth() === db.getMonth() &&
+        da.getDate() === db.getDate();
+    },
+
+    // Start instant of a booking time_range ("[..,..)" Postgres range text).
+    bookingStart(rangeStr) {
+      const match = String(rangeStr).match(/[\[(]"?([^,"]+)"?,/);
+      if (!match) return null;
+      const d = new Date(match[1]);
+      return isNaN(d) ? null : d;
+    },
+
+    homeLoading() {
+      const l = this.loading;
+      return l.products || l.orders || l.services || l.bookings ||
+        l.listings || l.inquiries || l.reservations;
+    },
+
+    // Paid orders created today, grouped by currency (merchants can sell
+    // in more than one currency; each group renders its own line).
+    homeRevenueToday() {
+      const now = new Date();
+      const sums = {};
+      for (const o of this.orders) {
+        if ((o.payment_status || "unpaid") !== "paid") continue;
+        if (!this.sameDay(o.created_at, now)) continue;
+        const cur = o.currency || "UGX";
+        sums[cur] = (sums[cur] || 0) + (Number(o.total_minor) || 0);
+      }
+      return Object.entries(sums).map(([currency, total]) => ({ currency, total }));
+    },
+
+    homeOrdersToday() {
+      const now = new Date();
+      return this.orders.filter((o) => this.sameDay(o.created_at, now));
+    },
+
+    // Paid (confirmed) but not yet fulfilled or cancelled — the pack-and-ship queue.
+    homeFulfillment() {
+      return this.orders
+        .filter((o) => o.status === "confirmed")
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+        .slice(0, this.HOME_QUEUE_CAP);
+    },
+
+    homeBookingsToday() {
+      const now = new Date();
+      return this.bookings.filter((b) => {
+        if (b.status === "cancelled") return false;
+        const start = this.bookingStart(b.time_range);
+        return start && this.sameDay(start, now);
+      });
+    },
+
+    homePendingBookings() {
+      return this.bookings
+        .filter((b) => b.status === "pending")
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+        .slice(0, this.HOME_QUEUE_CAP);
+    },
+
+    // Tracked stock at or below threshold; null means untracked (infinite).
+    homeLowStock() {
+      return this.products
+        .filter((p) => p.stock_qty !== null && p.stock_qty !== undefined && p.stock_qty <= this.LOW_STOCK_AT)
+        .sort((a, b) => (a.stock_qty ?? 0) - (b.stock_qty ?? 0))
+        .slice(0, this.HOME_QUEUE_CAP);
+    },
+
+    homeNewInquiries() {
+      const now = new Date();
+      return this.inquiries
+        .filter((i) => this.sameDay(i.created_at, now))
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        .slice(0, this.HOME_QUEUE_CAP);
+    },
+
+    homePendingReservations() {
+      return this.reservations
+        .filter((r) => (r.payment_status || "unpaid") !== "paid")
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+        .slice(0, this.HOME_QUEUE_CAP);
+    },
+
+    // Newest-first merged activity across verticals, capped.
+    homeActivity() {
+      const rows = [];
+      for (const o of this.orders) {
+        rows.push({
+          kind: "order", at: o.created_at, tab: "orders",
+          title: o.customer_name || "Order",
+          sub: this.money(o.total_minor, o.currency),
+        });
+      }
+      for (const b of this.bookings) {
+        rows.push({
+          kind: "booking", at: b.created_at, tab: "bookings",
+          title: b.customer_name || "Booking",
+          sub: b.service_name || "",
+        });
+      }
+      for (const i of this.inquiries) {
+        rows.push({
+          kind: "inquiry", at: i.created_at, tab: "inquiries",
+          title: i.name || "Inquiry",
+          sub: i.listing_title || "",
+        });
+      }
+      return rows
+        .filter((r) => r.at && !isNaN(new Date(r.at)))
+        .sort((a, b) => new Date(b.at) - new Date(a.at))
+        .slice(0, 6);
     },
 
     // ---- theme ----
@@ -1125,3 +1250,7 @@ function adminApp() {
     },
   };
 }
+
+// Exported for node unit tests (tests/home-stats.test.js) — `module` is
+// undefined in browsers, so this is a no-op on the dashboard itself.
+if (typeof module !== "undefined" && module.exports) module.exports = { adminApp };
