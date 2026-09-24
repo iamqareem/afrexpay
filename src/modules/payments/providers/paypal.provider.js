@@ -4,12 +4,9 @@
 // Uses @paypal/checkout-server-sdk (PayPal's official Node SDK).
 const paypal = require("@paypal/checkout-server-sdk");
 const crypto = require("node:crypto");
-
-// ISO 4217 zero-decimal currencies (currencies where 1 unit is not subdivided by 100)
-const ZERO_DECIMAL_CURRENCIES = new Set([
-  "BIF", "CLP", "DJF", "GNF", "JPY", "KMF", "KRW", "MGA",
-  "PYG", "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF"
-]);
+// Single source of truth — was a copy of src/lib/currency.js's list,
+// which is how the two drifted (NGN/GHS wrongly zero-decimal there).
+const { ZERO_DECIMAL_CURRENCIES, isZeroDecimal } = require("../../../lib/currency");
 
 function client(clientId, clientSecret, mode = "sandbox") {
   const environment = mode === "live"
@@ -19,8 +16,7 @@ function client(clientId, clientSecret, mode = "sandbox") {
 }
 
 function money(minor, currency = "USD") {
-  const code = (currency || "USD").toUpperCase();
-  if (ZERO_DECIMAL_CURRENCIES.has(code)) {
+  if (isZeroDecimal(currency)) {
     return String(Math.round(minor || 0));
   }
   return ((minor || 0) / 100).toFixed(2);
@@ -213,9 +209,8 @@ function normalizePayment(event) {
   if (!amountObj) amountObj = {};
   const amountValue = amountObj.value || "0";
   const currency = (amountObj.currency_code || "USD").toUpperCase();
-  const isZeroDecimal = ZERO_DECIMAL_CURRENCIES.has(currency);
 
-  const amountMinor = isZeroDecimal
+  const amountMinor = isZeroDecimal(currency)
     ? Math.round(parseFloat(amountValue))
     : Math.round(parseFloat(amountValue) * 100);
 

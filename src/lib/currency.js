@@ -42,12 +42,26 @@ function detectCurrencyFromRequest(req) {
   return "USD";
 }
 
+// Single canonical zero-decimal set, shared by every provider and every
+// display path. Stripe and PayPal publish the same list:
+// Stripe: https://docs.stripe.com/currencies#zero-decimal
+// PayPal: https://developer.paypal.com/docs/reports/reference/paypal-supported-currencies/
+// Notably KES/TZS/NGN/GHS/ZAR are DECIMAL on both — an earlier revision of
+// this file wrongly listed NGN/GHS (and KES/TZS) as zero-decimal.
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  "BIF", "CLP", "DJF", "GNF", "JPY", "KMF", "KRW", "MGA",
+  "PYG", "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF",
+]);
+
+function isZeroDecimal(code) {
+  return ZERO_DECIMAL_CURRENCIES.has(String(code || "").toUpperCase());
+}
+
 function formatPrice(priceMinor, currency = "USD") {
   const code = String(currency).toUpperCase();
   const minor = Number(priceMinor) || 0;
 
-  const zeroDecimal = ["UGX", "JPY", "KES", "TZS", "NGN", "GHS"];
-  if (zeroDecimal.includes(code)) {
+  if (isZeroDecimal(code)) {
     return `${code} ${Math.round(minor).toLocaleString()}`;
   }
 
@@ -68,6 +82,8 @@ function formatPrice(priceMinor, currency = "USD") {
 module.exports = {
   SUPPORTED_CURRENCIES,
   COUNTRY_CURRENCY_MAP,
+  ZERO_DECIMAL_CURRENCIES,
+  isZeroDecimal,
   resolveCurrencyByCountry,
   detectCurrencyFromRequest,
   formatPrice,

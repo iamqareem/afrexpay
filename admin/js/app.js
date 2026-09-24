@@ -511,8 +511,21 @@ function adminApp() {
       }
     },
 
+    // Zero-decimal mirror of src/lib/currency.js (browser bundle can't
+    // require node modules — keep in sync, both point at the Stripe list).
+    // Whole minor units printed raw (e.g. "UGX 5,000") are only correct
+    // for zero-decimal currencies; decimal ones need cents ("$50.00").
     money(minor, currency) {
-      return `${currency || "UGX"} ${Number(minor).toLocaleString("en-UG")}`;
+      const code = (currency || "UGX").toUpperCase();
+      const n = Number(minor) || 0;
+      const zeroDecimal = new Set([
+        "BIF", "CLP", "DJF", "GNF", "JPY", "KMF", "KRW", "MGA",
+        "PYG", "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF",
+      ]);
+      if (zeroDecimal.has(code)) return `${code} ${Math.round(n).toLocaleString("en-UG")}`;
+      const symbols = { USD: "$", EUR: "€", GBP: "£", KES: "KSh ", TZS: "TSh ", NGN: "₦", GHS: "GH₵ ", ZAR: "R" };
+      const symbol = symbols[code] || `${code} `;
+      return `${symbol}${(n / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     },
 
     // ---- client-side filtering (Phase 3) ----
