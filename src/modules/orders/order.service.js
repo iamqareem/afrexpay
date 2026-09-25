@@ -251,4 +251,37 @@ async function updateOrderStatus(tenantId, orderId, status) {
   return rows[0] || null;
 }
 
-module.exports = { createOrder, listOrders, startOrderCheckout, markOrderPaid, updateOrderStatus, ORDER_STATUSES };
+// Abandoned-checkout sweep: cancel orders where the customer started a
+// provider checkout (payment_status flipped unpaid -> pending + session id
+// stored) but never completed within `olderThanMinutes`. Cash orders stay
+// payment_status='unpaid' forever, so they are never touched here.
+// Stock restore adds back each line's qty; untracked (NULL) stock skipped.
+// Single statement, atomic: either an order is cancelled AND its stock
+// restored, or neither. `db` defaults to the pool but accepts any
+// { query } client so unit tests can inject a fake.
+async function releaseAbandonedOrders(db = pool, { olderThanMinutes = 1440 } = {}) {
+  const mins = Number(olderThanMinutes);
+  if (!Number.isFinite(mins) || mins <= 0) {
+    throw Object.assign(new Error("olderThanMinutes must be a positive number."), { status: 400 });
+  }
+  const { rows } = await db.query(
+    `WITH cancelled AS (
+       UPDATE orders SET status = 'cancelled'
+       WHERE status = 'pending' AND payment_status = 'pending'
+         AND created_at < now() - make_interval(mins => $1)
+       RETURNING id
+     ),
+     restored AS (
+       UPDATE products p SET stock_qty = p.stock_qty + oi.qty
+       FROM order_items oi JOIN cancelled c ON c.id = oi.order_id
+       WHERE p.id = oi.product_id AND p.stock_qty IS NOT NULL
+       RETURNING p.id
+     )
+     SELECT (SELECT count(*)::int FROM cancelled) AS cancelled,
+            (SELECT count(*)::int FROM restored) AS restored`,
+    [mins]
+  );
+  return rows[0];
+}
+
+module.exports = { createOrder, listOrders, startOrderCheckout, markOrderPaid, updateOrderStatus, releaseAbandonedOrders, ORDER_STATUSES };

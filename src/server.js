@@ -23,3 +23,23 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`afrexpay platform running on port ${PORT}`);
 });
+
+// Hourly abandoned-checkout sweep (single pm2 fork = single timer, no
+// duplicate runs). Env-gated: ABANDONED_SWEEP_ENABLED=false disables,
+// ABANDONED_ORDER_TTL_MINUTES sets the abandon threshold (default 1440,
+// matching Stripe's 24h session expiry — cancelling earlier would orphan
+// a still-payable session).
+if (process.env.ABANDONED_SWEEP_ENABLED !== "false") {
+  const ttl = Number(process.env.ABANDONED_ORDER_TTL_MINUTES) || 1440;
+  const sweep = async () => {
+    try {
+      const { releaseAbandonedOrders } = require("./modules/orders/order.service");
+      const { cancelled, restored } = await releaseAbandonedOrders(undefined, { olderThanMinutes: ttl });
+      if (cancelled > 0) console.log(`Abandoned sweep: cancelled ${cancelled} orders, restored stock on ${restored} lines.`);
+    } catch (err) {
+      console.error("Abandoned sweep failed:", err.message);
+    }
+  };
+  const timer = setInterval(sweep, 60 * 60 * 1000);
+  timer.unref();
+}
