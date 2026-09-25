@@ -3,6 +3,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { releaseAbandonedOrders } = require("../src/modules/orders/order.service");
+const { releaseAbandonedBookings } = require("../src/modules/bookings/booking.service");
 
 function fakeDb(result = { cancelled: 2, restored: 3 }) {
   const calls = [];
@@ -44,4 +45,16 @@ test("defaults to 24h TTL and rejects bad input", async () => {
   await assert.rejects(releaseAbandonedOrders(db, { olderThanMinutes: 0 }), /positive number/);
   await assert.rejects(releaseAbandonedOrders(db, { olderThanMinutes: -5 }), /positive number/);
   await assert.rejects(releaseAbandonedOrders(db, { olderThanMinutes: NaN }), /positive number/);
+});
+
+test("bookings sweep cancels pending+pending, freeing exclusion-held slots", async () => {
+  const db = fakeDb({ cancelled: 1 });
+  const out = await releaseAbandonedBookings(db, { olderThanMinutes: 120 });
+  assert.deepEqual(out, { cancelled: 1 });
+  const { sql, values } = db.calls[0];
+  assert.ok(sql.includes("UPDATE bookings SET status = 'cancelled'"), "cancels");
+  assert.ok(sql.includes("status = 'pending' AND payment_status = 'pending'"), "abandoned predicate");
+  assert.ok(!sql.includes("unpaid"), "cash/walk-in bookings untouched");
+  assert.deepEqual(values, [120]);
+  await assert.rejects(releaseAbandonedBookings(db, { olderThanMinutes: 0 }), /positive number/);
 });

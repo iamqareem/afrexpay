@@ -8,7 +8,7 @@ This project is a multi-tenant storefront backend built with **Node.js**, **Expr
 - A theme system for customizable storefront UI.
 - Polymorphic media handling with tenant‑scoped storage.
 - Authentication via JWT cookies.
-- Integration with **Stripe** for payments and **Matrix** for notifications.
+- Integration with **Stripe and PayPal** for payments (per-tenant keys, shared provider registry) and **Matrix** for notifications.
 - Support for three verticals: **products**, **services (bookings)**, and **listings**.
 
 Multi-tenant storefront backend. One Node process, one Postgres database,
@@ -19,7 +19,7 @@ a new store.
 
 ```
 afrexpay/
-  docker-compose.yml     # app + Postgres, everything wired together
+  docker-compose.yml     # Postgres only (bound to 127.0.0.1); the app runs under pm2 by default
   Dockerfile
   docker-entrypoint.sh    # runs migrations, then starts the server
   migrations/               # node-pg-migrate — the single source of truth for schema
@@ -32,6 +32,7 @@ afrexpay/
     yeezy/                  # streetwear & footwear storefront theme
     backmarket/             # refurbished-goods storefront theme
     automobile/             # auto & parts storefront theme
+    souk/                   # fragrance & modest-attire storefront theme
     booking-slots/           # service/booking storefront theme
     resort/                 # hotel & recreation booking theme
     listing-grid/             # real estate storefront theme
@@ -403,9 +404,11 @@ via raw SQL) as the backstop if anything ever bypassed it.
 
 ## Payments — Stripe, all three verticals (pay-now is additive)
 
-**Scope of this pass**: Stripe only. Listings deposit first, then pay-now
-for product orders and service bookings on the same abstraction. PayPal
-extends the same provider shape later — not built yet.
+**Scope**: Stripe and PayPal behind one provider registry
+(`src/modules/payments/providers/`). Pay-now is additive on product orders,
+service bookings, and listing deposits — the cash flow underneath stays
+valid, card payment is optional on top. Webhook URLs are per-provider and
+per-tenant (`/api/payments/webhook/:provider/:tenantId`).
 
 **Model: bring-your-own-keys, not Stripe Connect.** Each tenant pastes
 their own Stripe account's keys into their dashboard's Payments tab; this
@@ -636,17 +639,21 @@ Any tenant's `theme_slug` in `store_configs` can then point at it — the
 
 ## Running it
 
+Docker is Postgres-only; the app itself runs under pm2 (`ecosystem.config.js`,
+single fork — the tenant cache is in-process, so never scale past 1 without
+moving it to Redis first).
+
 ```bash
-cp .env.example .env      # edit POSTGRES_PASSWORD and JWT_SECRET for real use
-docker compose up -d
+cp .env.example .env      # set POSTGRES_PASSWORD, JWT_SECRET (16+ chars),
+                          # and PAYMENT_ENCRYPTION_KEY (64 hex chars) for real use
+docker compose up -d      # Postgres on 127.0.0.1:5432
+npm run migrate:up        # apply pending migrations
+npm run pm2               # start afrexpay (logs: npm run pm2:logs)
 ```
 
 First boot creates `./data/postgres` — delete it to reset from scratch.
-Migrations run automatically on container start (`docker-entrypoint.sh`,
-before the server boots), so a fresh volume gets the full schema applied
-with no manual step. `./data/media` is mounted into the app container for
-merchant photo uploads (until/unless that moves to object storage — same
-volume mount idea either way).
+`./data/media` holds merchant photo uploads on host disk (until/unless that
+moves to object storage — same volume-mount idea either way).
 
 **Note on this delivery:** tested directly against a real local Postgres
 instance — signup, login, cross-tenant auth isolation, product CRUD, order
@@ -654,10 +661,10 @@ placement with stock decrement (including a rollback check on an oversell
 attempt), theme-aware storefront serving, tenant-scoped media isolation, the
 full admin dashboard flow, base-domain signup with the cross-subdomain
 cookie fix, and photo upload (including rejecting oversized/wrong-type files)
-all passed. The `docker-compose.yml` itself is syntax-validated but wasn't
-run end-to-end in this environment (no container runtime available here) —
-run `docker compose up` and check `docker compose logs app` on first deploy
-to catch anything environment-specific.
+all passed. `docker-compose.yml` is syntax-validated; on first deploy run
+`docker compose up -d`, confirm the db healthcheck passes, then
+`npm run migrate:up` before `npm run pm2` to catch anything
+environment-specific.
 
 ## Local dev without Docker
 
@@ -746,10 +753,12 @@ there is no `ORDER BY` injection surface. Shared parsing lives in
 - PayPal — shipped via the provider registry (`src/modules/payments/providers/`),
   same shape as Stripe; merchants pick a provider per checkout and the
   dashboard shows the correct per-provider webhook URL
-- Abandoned-checkout stock restore — an `unpaid` order holds decremented
-  stock and a `pending` booking holds its slot until the merchant cancels;
-  acceptable for v1 (badges make it visible), needs a real policy before
-  high-volume use
+- ~~Abandoned-checkout stock restore~~ — shipped: an hourly sweep
+  (`releaseAbandonedOrders` / `releaseAbandonedBookings`, server.js timer,
+  default 24h TTL matching Stripe session expiry) cancels `pending`/`pending`
+  checkouts and restores stock / frees slots. Cash orders (`unpaid`) are
+  never touched. Tune via `ABANDONED_ORDER_TTL_MINUTES`, disable via
+  `ABANDONED_SWEEP_ENABLED=false`
 - Stripe Connect — the correct upgrade once there are enough tenants that
   a shared platform account beats bring-your-own-keys; deliberately not
   built for a first client

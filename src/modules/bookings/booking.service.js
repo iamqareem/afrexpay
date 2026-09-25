@@ -269,4 +269,25 @@ async function markBookingPaid(tenantId, sessionId, amountMinor, currency, provi
   }
 }
 
-module.exports = { createBooking, listBookings, updateBookingStatus, startBookingCheckout, markBookingPaid, checkSlotInWindows, BOOKING_STATUSES };
+// Abandoned-booking sweep: cancel bookings where the customer started a
+// provider checkout (payment_status flipped unpaid -> pending) but never
+// completed within `olderThanMinutes`. Cancelling frees the slot — the
+// exclusion constraint only covers status != 'cancelled'. Walk-in/cash
+// bookings stay payment_status='unpaid' forever, so they are never touched.
+// Single statement, atomic. `db` injectable for unit tests.
+async function releaseAbandonedBookings(db = pool, { olderThanMinutes = 1440 } = {}) {
+  const mins = Number(olderThanMinutes);
+  if (!Number.isFinite(mins) || mins <= 0) {
+    throw Object.assign(new Error("olderThanMinutes must be a positive number."), { status: 400 });
+  }
+  const { rows } = await db.query(
+    `UPDATE bookings SET status = 'cancelled'
+     WHERE status = 'pending' AND payment_status = 'pending'
+       AND created_at < now() - make_interval(mins => $1)
+     RETURNING id`,
+    [mins]
+  );
+  return { cancelled: rows.length };
+}
+
+module.exports = { createBooking, listBookings, updateBookingStatus, startBookingCheckout, markBookingPaid, checkSlotInWindows, releaseAbandonedBookings, BOOKING_STATUSES };

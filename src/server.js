@@ -34,8 +34,11 @@ if (process.env.ABANDONED_SWEEP_ENABLED !== "false") {
   const sweep = async () => {
     try {
       const { releaseAbandonedOrders } = require("./modules/orders/order.service");
+      const { releaseAbandonedBookings } = require("./modules/bookings/booking.service");
       const { cancelled, restored } = await releaseAbandonedOrders(undefined, { olderThanMinutes: ttl });
       if (cancelled > 0) console.log(`Abandoned sweep: cancelled ${cancelled} orders, restored stock on ${restored} lines.`);
+      const freed = await releaseAbandonedBookings(undefined, { olderThanMinutes: ttl });
+      if (freed.cancelled > 0) console.log(`Abandoned sweep: cancelled ${freed.cancelled} bookings, slots freed.`);
     } catch (err) {
       console.error("Abandoned sweep failed:", err.message);
     }
