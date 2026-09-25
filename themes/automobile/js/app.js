@@ -1,5 +1,15 @@
 // Automobile Theme - Web Component Architecture (Material You / Tesla aesthetic)
-const money = (n, currency = "UGX") => `${currency} ${n.toLocaleString("en-UG")}`;
+// Zero-decimal mirror of src/lib/currency.js (static bundles can't require
+// node modules — keep in sync, both point at the Stripe list).
+const ZERO_DECIMAL = new Set([
+  "BIF", "CLP", "DJF", "GNF", "JPY", "KMF", "KRW", "MGA",
+  "PYG", "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF",
+]);
+const money = (n, currency = "UGX") => {
+  const code = String(currency || "UGX").toUpperCase();
+  if (ZERO_DECIMAL.has(code)) return `${code} ${Number(n).toLocaleString("en-UG")}`;
+  return `${code} ${(Number(n) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 class Store extends EventTarget {
   constructor() {

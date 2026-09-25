@@ -17,8 +17,16 @@ const state = {
   lastBookingId: null,
 };
 
+// Zero-decimal mirror of src/lib/currency.js (static bundles can't require
+// node modules — keep in sync, both point at the Stripe list).
+const ZERO_DECIMAL = new Set([
+  "BIF", "CLP", "DJF", "GNF", "JPY", "KMF", "KRW", "MGA",
+  "PYG", "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF",
+]);
 function money(minor, currency) {
-  return `${currency || "USD"} ${Number(minor).toLocaleString("en-US")}`;
+  const code = (currency || "USD").toUpperCase();
+  if (ZERO_DECIMAL.has(code)) return `${code} ${Number(minor).toLocaleString("en-UG")}`;
+  return `${code} ${(Number(minor) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function applyConfig(config) {
