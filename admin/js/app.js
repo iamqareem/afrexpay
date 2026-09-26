@@ -79,7 +79,7 @@ function adminApp() {
 
     // staff & chairs (multi-resource booking)
     resources: [],
-    resourceForm: { name: "", serviceIds: [] },
+    resourceForm: { name: "", serviceId: "" },
     resourceError: "",
 
     // availability
@@ -255,7 +255,7 @@ function adminApp() {
       this.availableThemes = [];
       this.loginEmail = "";
       this.resources = [];
-      this.resourceForm = { name: "", serviceIds: [] };
+      this.resourceForm = { name: "", serviceId: "" };
       this.resourceError = "";
       this.loading = {
         products: true, orders: true, services: true, hours: true,
@@ -910,71 +910,29 @@ function adminApp() {
       }
     },
 
-    resourceServiceNames(r) {
-      if (!r.service_ids || r.service_ids.length === 0) return "All services";
-      return r.service_ids
-        .map((id) => (this.services.find((s) => s.id === id) || {}).name)
-        .filter(Boolean)
-        .join(", ") || `${r.service_ids.length} services`;
-    },
-
     async submitResource() {
       this.resourceError = "";
       if (!this.resourceForm.name.trim()) {
         this.resourceError = "Name is required (e.g. Chair 1, Amina).";
         return;
       }
+      if (!this.resourceForm.serviceId && this.services.length > 0) {
+        this.resourceForm.serviceId = this.services[0].id;
+      }
       const res = await fetch("/api/resources", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ name: this.resourceForm.name.trim(), serviceIds: this.resourceForm.serviceIds }),
+        body: JSON.stringify({ name: this.resourceForm.name.trim(), serviceId: this.resourceForm.serviceId }),
       });
       const data = await res.json();
       if (!res.ok) {
         this.resourceError = data.error || "Could not save resource.";
         return;
       }
-      this.resourceForm = { name: "", serviceIds: [] };
+      this.resourceForm = { name: "", serviceId: "" };
       await this.loadResources();
       this.showToast("Resource added.");
-    },
-
-    async toggleResourceService(resourceId, serviceId, linked) {
-      const resource = this.resources.find((r) => r.id === resourceId);
-      if (!resource) return;
-      const current = new Set(resource.service_ids || []);
-      // Empty link set means "all services" — toggling one on from empty
-      // would narrow it, so start from the full list in that case.
-      const base = current.size === 0 ? this.services.map((s) => s.id) : [...current];
-      const next = linked ? base.filter((id) => id !== serviceId) : [...base, serviceId];
-      const res = await fetch(`/api/resources/${resourceId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ serviceIds: [...new Set(next)] }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        this.showToast(data.error || "Could not update link.", "error");
-        return;
-      }
-      await this.loadResources();
-    },
-
-    async toggleResourceActive(resource) {
-      const res = await fetch(`/api/resources/${resource.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ active: !resource.active }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        this.showToast(data.error || "Could not update resource.", "error");
-        return;
-      }
-      await this.loadResources();
     },
 
     async deleteResource(id) {

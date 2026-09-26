@@ -532,43 +532,30 @@
 
           <div class="card">
             <h3>Staff &amp; chairs</h3>
-            <p class="muted">Who or what can take parallel bookings. A service with no linked staff below accepts any of them.</p>
+            <p class="muted">Who or what can take a booking. Same time slot can be booked once per row below.</p>
             <div class="field-grid">
-              <div class="field"><label for="r-name">Name</label><input id="r-name" x-model="resourceForm.name" placeholder="Chair 1, Amina…" /></div>
-              <div class="field"><label>Services (blank = all)</label>
-                <div class="cluster">
+              <div class="field"><label for="r-service">Service</label>
+                <select id="r-service" x-model="resourceForm.serviceId">
                   <template x-for="s in services" :key="s.id">
-                    <label style="display:inline-flex;align-items:center;gap:0.35rem;font-weight:400;text-transform:none;letter-spacing:0;font-size:0.9rem;">
-                      <input type="checkbox" :value="s.id" :checked="resourceForm.serviceIds.includes(s.id)" @change="$event.target.checked ? resourceForm.serviceIds.push(s.id) : resourceForm.serviceIds = resourceForm.serviceIds.filter(id => id !== s.id)" />
-                      <span x-text="s.name"></span>
-                    </label>
+                    <option :value="s.id" x-text="s.name"></option>
                   </template>
-                </div>
+                </select>
               </div>
+              <div class="field"><label for="r-name">Name</label><input id="r-name" x-model="resourceForm.name" placeholder="Chair 1, Amina…" /></div>
             </div>
             <p class="error-text" x-show="resourceError" x-text="resourceError"></p>
             <button class="btn" @click="submitResource">Add resource</button>
             <table style="margin-top:1rem">
-              <thead><tr><th scope="col">Name</th><th scope="col">Services</th><th scope="col">Active</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+              <thead><tr><th scope="col">Name</th><th scope="col">Service</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
               <tbody x-show="loading.resources">
-                <tr class="skel-row"><td><span class="skel" style="width:60%"></span></td><td><span class="skel" style="width:80%"></span></td><td><span class="skel" style="width:40%"></span></td><td></td></tr>
-                <tr class="skel-row"><td><span class="skel" style="width:55%"></span></td><td><span class="skel" style="width:70%"></span></td><td><span class="skel" style="width:45%"></span></td><td></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:60%"></span></td><td><span class="skel" style="width:80%"></span></td><td></td></tr>
+                <tr class="skel-row"><td><span class="skel" style="width:55%"></span></td><td><span class="skel" style="width:70%"></span></td><td></td></tr>
               </tbody>
               <tbody x-show="!loading.resources">
                 <template x-for="r in resources" :key="r.id">
                   <tr>
                     <td data-label="Name" x-text="r.name"></td>
-                    <td data-label="Services">
-                      <template x-for="s in services" :key="s.id">
-                        <label style="display:inline-flex;align-items:center;gap:0.3rem;margin-right:0.6rem;font-weight:400;text-transform:none;letter-spacing:0;font-size:0.85rem;">
-                          <input type="checkbox" :checked="(r.service_ids || []).length === 0 || r.service_ids.includes(s.id)" @change="toggleResourceService(r.id, s.id, $event.target.checked)" :aria-label="s.name + ' for ' + r.name" />
-                          <span x-text="s.name"></span>
-                        </label>
-                      </template>
-                    </td>
-                    <td data-label="Active">
-                      <button class="row-actions" @click="toggleResourceActive(r)" x-text="r.active ? 'Yes' : 'No'" :aria-label="'Toggle active for ' + r.name"></button>
-                    </td>
+                    <td data-label="Service" x-text="r.service_name"></td>
                     <td class="row-actions">
                       <button class="danger" @click="deleteResource(r.id)">Remove</button>
                     </td>

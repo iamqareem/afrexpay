@@ -81,7 +81,7 @@ async function deleteException(tenantId, exceptionId) {
 // bookings that overlap each candidate slot — per resource when resourceId
 // is given, unioned across eligible resources otherwise. Response shape is
 // additive: { slots, resources? } so old clients keep working.
-const { linkedResourceIds } = require("./resource.service");
+const { serviceResourceIds } = require("./resource.service");
 
 async function getAvailableSlots(tenantId, serviceId, dateStr, resourceId = null) {
   const serviceResult = await pool.query(
@@ -114,9 +114,9 @@ async function getAvailableSlots(tenantId, serviceId, dateStr, resourceId = null
     windows = windowResult.rows.map((r) => ({ start: r.start_time, end: r.end_time }));
   }
 
-  // Eligible resources for this service (default-open when unlinked).
-  // A requested resourceId outside that set is a 400, not a silent filter.
-  const eligibleIds = await linkedResourceIds(tenantId, serviceId);
+  // Resources belonging to this service, oldest first. A requested
+  // resourceId outside that set is a 400, not a silent filter.
+  const eligibleIds = await serviceResourceIds(tenantId, serviceId);
   let targetIds = eligibleIds;
   if (resourceId) {
     if (!eligibleIds.map(String).includes(String(resourceId))) {

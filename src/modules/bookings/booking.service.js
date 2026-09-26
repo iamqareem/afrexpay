@@ -1,7 +1,7 @@
 // src/modules/bookings/booking.service.js
 const pool = require("../../db/pool");
 const { parseListParams, searchCondition } = require("../../lib/list-query");
-const { linkedResourceIds, pickFreeResource } = require("../services/resource.service");
+const { serviceResourceIds, pickFreeResource } = require("../services/resource.service");
 
 // Postgres error code for exclusion constraint violation — this is how a
 // double-booking attempt surfaces. Not a magic number pulled from nowhere:
@@ -105,13 +105,13 @@ async function createBooking(tenantId, { serviceId, customerName, phone, notes, 
   // be eligible for the service, otherwise 400. Omitted means auto-assign
   // the first free eligible resource, otherwise 409. The exclusion
   // constraint remains the final race guard either way.
-  const linkedIds = await linkedResourceIds(tenantId, service.id);
-  if (linkedIds.length === 0) {
+  const resourceIds = await serviceResourceIds(tenantId, service.id);
+  if (resourceIds.length === 0) {
     throw Object.assign(new Error("No bookable resources configured for this service."), { status: 400 });
   }
   let resolvedResourceId;
   if (resourceId) {
-    if (!linkedIds.map(String).includes(String(resourceId))) {
+    if (!resourceIds.map(String).includes(String(resourceId))) {
       throw Object.assign(new Error("Resource not available for this service."), { status: 400 });
     }
     const clash = await pool.query(
@@ -131,7 +131,7 @@ async function createBooking(tenantId, { serviceId, customerName, phone, notes, 
          AND time_range && tstzrange($3, $4)`,
       [tenantId, service.id, start.toISOString(), end.toISOString()]
     );
-    resolvedResourceId = pickFreeResource(linkedIds, busy.rows.map((r) => r.resource_id));
+    resolvedResourceId = pickFreeResource(resourceIds, busy.rows.map((r) => r.resource_id));
     if (!resolvedResourceId) {
       throw Object.assign(new Error("That time slot is fully booked. Please pick another."), { status: 409 });
     }

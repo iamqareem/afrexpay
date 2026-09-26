@@ -32,7 +32,7 @@ async function createService(tenantId, data) {
   );
   // Every service gets a default resource so bookings keep working with
   // zero merchant action — same invariant as the migration backfill.
-  await createResource(tenantId, { name: `Default — ${name}`, serviceIds: [rows[0].id] });
+  await createResource(tenantId, { name: `Default — ${name}`, serviceId: rows[0].id });
   return rows[0];
 }
 
