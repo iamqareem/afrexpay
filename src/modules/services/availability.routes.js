@@ -47,12 +47,14 @@ router.post("/exceptions", authRequired, async (req, res) => {
 });
 
 // Public — the storefront's booking picker calls this to show free slots.
+// Optional resourceId narrows to one staff/chair; response includes the
+// eligible resources list when there's more than one to choose from.
 router.get("/slots", async (req, res) => {
-  const { serviceId, date } = req.query;
+  const { serviceId, date, resourceId } = req.query;
   if (!serviceId || !date) {
     return res.status(400).json({ error: "serviceId and date query params are required." });
   }
-  const result = await getAvailableSlots(req.tenant.id, serviceId, date);
+  const result = await getAvailableSlots(req.tenant.id, serviceId, date, resourceId || null);
   if (result.error) return res.status(400).json(result);
   res.json(result);
 });

@@ -78,8 +78,12 @@ async function deleteException(tenantId, exceptionId) {
 // Computes free slots for a given service on a given date, at the service's
 // own duration granularity. Reads the day's window (exception overrides the
 // weekly recurring one if present), then subtracts any existing non-cancelled
-// bookings that overlap each candidate slot.
-async function getAvailableSlots(tenantId, serviceId, dateStr) {
+// bookings that overlap each candidate slot — per resource when resourceId
+// is given, unioned across eligible resources otherwise. Response shape is
+// additive: { slots, resources? } so old clients keep working.
+const { linkedResourceIds } = require("./resource.service");
+
+async function getAvailableSlots(tenantId, serviceId, dateStr, resourceId = null) {
   const serviceResult = await pool.query(
     `SELECT duration_minutes FROM services WHERE tenant_id = $1 AND id = $2 AND active = true`,
     [tenantId, serviceId]
@@ -110,40 +114,74 @@ async function getAvailableSlots(tenantId, serviceId, dateStr) {
     windows = windowResult.rows.map((r) => ({ start: r.start_time, end: r.end_time }));
   }
 
-  // Existing bookings that day, for conflict-checking against candidate slots.
+  // Eligible resources for this service (default-open when unlinked).
+  // A requested resourceId outside that set is a 400, not a silent filter.
+  const eligibleIds = await linkedResourceIds(tenantId, serviceId);
+  let targetIds = eligibleIds;
+  if (resourceId) {
+    if (!eligibleIds.map(String).includes(String(resourceId))) {
+      return { error: "Resource not available for this service." };
+    }
+    targetIds = [resourceId];
+  }
+  if (targetIds.length === 0) return { slots: [] };
+
+  // Existing bookings that day, grouped per resource for conflict-checking.
   const bookingsResult = await pool.query(
-    `SELECT time_range FROM bookings
+    `SELECT resource_id, time_range FROM bookings
      WHERE tenant_id = $1 AND service_id = $3 AND status != 'cancelled'
        AND time_range && tstzrange($2::date, ($2::date + interval '1 day'))`,
     [tenantId, dateStr, serviceId]
   );
-  const bookedRanges = bookingsResult.rows.map((r) => r.time_range);
+  const rangesByResource = new Map();
+  for (const row of bookingsResult.rows) {
+    const key = row.resource_id ? String(row.resource_id) : null;
+    if (!rangesByResource.has(key)) rangesByResource.set(key, []);
+    rangesByResource.get(key).push(row.time_range);
+  }
 
   const durationMs = service.duration_minutes * 60 * 1000;
   const dayStart = new Date(`${dateStr}T00:00:00Z`);
 
-  const slots = [];
-  for (const w of windows) {
-    if (!w.start || !w.end) continue;
-    const [wsH, wsM] = w.start.split(":").map(Number);
-    const [weH, weM] = w.end.split(":").map(Number);
-    if ([wsH, wsM, weH, weM].some((n) => Number.isNaN(n))) continue;
-    const slotStart0 = new Date(dayStart.getTime() + (wsH * 60 + wsM) * 60000);
-    const windowEndTime = new Date(dayStart.getTime() + (weH * 60 + weM) * 60000);
-    if (windowEndTime <= slotStart0) continue;
-    let cursor = new Date(slotStart0);
-    while (cursor.getTime() + durationMs <= windowEndTime.getTime()) {
-      const slotEnd = new Date(cursor.getTime() + durationMs);
-      const overlapsExisting = bookedRanges.some((rangeStr) => rangesOverlap(rangeStr, cursor, slotEnd));
-      if (!overlapsExisting) {
-        slots.push({ start: cursor.toISOString(), end: slotEnd.toISOString() });
+  // Legacy rows with NULL resource_id (shouldn't exist post-migration,
+  // but belt-and-suspenders) block every resource rather than none.
+  const legacyRanges = rangesByResource.get(null) || [];
+  const seen = new Map(); // start ISO -> slot (union across resources)
+  for (const rid of targetIds) {
+    const bookedRanges = [...legacyRanges, ...(rangesByResource.get(String(rid)) || [])];
+    for (const w of windows) {
+      if (!w.start || !w.end) continue;
+      const [wsH, wsM] = w.start.split(":").map(Number);
+      const [weH, weM] = w.end.split(":").map(Number);
+      if ([wsH, wsM, weH, weM].some((n) => Number.isNaN(n))) continue;
+      const slotStart0 = new Date(dayStart.getTime() + (wsH * 60 + wsM) * 60000);
+      const windowEndTime = new Date(dayStart.getTime() + (weH * 60 + weM) * 60000);
+      if (windowEndTime <= slotStart0) continue;
+      let cursor = new Date(slotStart0);
+      while (cursor.getTime() + durationMs <= windowEndTime.getTime()) {
+        const slotEnd = new Date(cursor.getTime() + durationMs);
+        const overlapsExisting = bookedRanges.some((rangeStr) => rangesOverlap(rangeStr, cursor, slotEnd));
+        if (!overlapsExisting && !seen.has(cursor.toISOString())) {
+          seen.set(cursor.toISOString(), { start: cursor.toISOString(), end: slotEnd.toISOString() });
+        }
+        cursor = slotEnd; // back-to-back slots at the service's own duration granularity
       }
-      cursor = slotEnd; // back-to-back slots at the service's own duration granularity
     }
   }
-  slots.sort((a, b) => new Date(a.start) - new Date(b.start));
+  const slots = [...seen.values()].sort((a, b) => new Date(a.start) - new Date(b.start));
 
-  return { slots };
+  // Eligible resources ride along so the storefront can render a staff
+  // picker without a second round trip. Omitted for single-resource
+  // services so old themes see a byte-identical shape.
+  const out = { slots };
+  if (eligibleIds.length > 1) {
+    const { rows } = await pool.query(
+      `SELECT id, name FROM resources WHERE tenant_id = $1 AND id = ANY($2) ORDER BY created_at`,
+      [tenantId, eligibleIds]
+    );
+    out.resources = rows;
+  }
+  return out;
 }
 
 // Postgres returns tstzrange as a string like ["2026-08-01 14:00:00+00","2026-08-01 14:45:00+00")

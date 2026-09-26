@@ -1,6 +1,7 @@
 // src/modules/services/service.service.js
 const pool = require("../../db/pool");
 const { parseListParams, searchCondition } = require("../../lib/list-query");
+const { createResource } = require("./resource.service");
 
 async function listServices(tenantId, params = {}) {
   const { search, limit, offset, dir } = parseListParams(params, { defaultDir: "ASC" });
@@ -29,6 +30,9 @@ async function createService(tenantId, data) {
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
     [tenantId, name, description || null, durationMinutes, priceMinor, currency || "UGX"]
   );
+  // Every service gets a default resource so bookings keep working with
+  // zero merchant action — same invariant as the migration backfill.
+  await createResource(tenantId, { name: `Default — ${name}`, serviceIds: [rows[0].id] });
   return rows[0];
 }
 

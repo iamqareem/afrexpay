@@ -14,7 +14,7 @@ function adminApp() {
     loading: {
       products: true, orders: true, services: true, hours: true,
       exceptions: true, bookings: true, listings: true,
-      inquiries: true, reservations: true,
+      inquiries: true, reservations: true, resources: true,
     },
 
     // client-side find / filter / sort per table (Phase 3). The raw
@@ -76,6 +76,11 @@ function adminApp() {
     editingServiceId: null,
     serviceError: "",
     servicePhotos: [],
+
+    // staff & chairs (multi-resource booking)
+    resources: [],
+    resourceForm: { name: "", serviceIds: [] },
+    resourceError: "",
 
     // availability
     weekDays: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
@@ -177,7 +182,7 @@ function adminApp() {
         this.loadDomainStatus(),
       ]);
       if (this.tabVisible("services")) {
-        await Promise.all([this.loadServices(), this.loadWeeklyHours(), this.loadExceptions(), this.loadBookings()]);
+        await Promise.all([this.loadServices(), this.loadResources(), this.loadWeeklyHours(), this.loadExceptions(), this.loadBookings()]);
       }
       if (this.tabVisible("listings")) {
         await Promise.all([this.loadListings(), this.loadInquiries(), this.loadReservations()]);
@@ -249,10 +254,13 @@ function adminApp() {
       this.exceptions = [];
       this.availableThemes = [];
       this.loginEmail = "";
+      this.resources = [];
+      this.resourceForm = { name: "", serviceIds: [] };
+      this.resourceError = "";
       this.loading = {
         products: true, orders: true, services: true, hours: true,
         exceptions: true, bookings: true, listings: true,
-        inquiries: true, reservations: true,
+        inquiries: true, reservations: true, resources: true,
       };
       try { location.hash = ""; } catch { /* non-browser env */ }
     },
@@ -303,7 +311,7 @@ function adminApp() {
         // load their data now rather than leaving them empty until a
         // full page refresh happens to trigger loadAll() again.
         if (this.tabVisible("services") && this.services.length === 0) {
-          await Promise.all([this.loadServices(), this.loadWeeklyHours(), this.loadExceptions(), this.loadBookings()]);
+          await Promise.all([this.loadServices(), this.loadResources(), this.loadWeeklyHours(), this.loadExceptions(), this.loadBookings()]);
         }
         if (this.tabVisible("listings") && this.listings.length === 0) {
           await Promise.all([this.loadListings(), this.loadInquiries(), this.loadReservations()]);
@@ -578,7 +586,7 @@ function adminApp() {
     filteredBookings() {
       const f = this.filters.bookings;
       const rows = this.bookings.filter((b) =>
-        this.matchQ(b, f.q, ["customer_name", "phone", "service_name"]) &&
+        this.matchQ(b, f.q, ["customer_name", "phone", "service_name", "resource_name"]) &&
         (!f.status || b.status === f.status)
       );
       return this.byNewOld(rows, f.sort, (b) => b.created_at);
@@ -885,6 +893,99 @@ function adminApp() {
         this.showToast("Service removed.");
       } else {
         this.showToast("Could not remove service.", "error");
+      }
+    },
+
+    // ---- staff & chairs (multi-resource booking) ----
+    async loadResources() {
+      this.loading.resources = true;
+      try {
+        const res = await fetch("/api/resources", { credentials: "same-origin" });
+        if (!res.ok) throw new Error("Could not load staff & chairs.");
+        this.resources = await res.json();
+      } catch (err) {
+        this.showToast(err.message || "Could not load staff & chairs.", "error");
+      } finally {
+        this.loading.resources = false;
+      }
+    },
+
+    resourceServiceNames(r) {
+      if (!r.service_ids || r.service_ids.length === 0) return "All services";
+      return r.service_ids
+        .map((id) => (this.services.find((s) => s.id === id) || {}).name)
+        .filter(Boolean)
+        .join(", ") || `${r.service_ids.length} services`;
+    },
+
+    async submitResource() {
+      this.resourceError = "";
+      if (!this.resourceForm.name.trim()) {
+        this.resourceError = "Name is required (e.g. Chair 1, Amina).";
+        return;
+      }
+      const res = await fetch("/api/resources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ name: this.resourceForm.name.trim(), serviceIds: this.resourceForm.serviceIds }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        this.resourceError = data.error || "Could not save resource.";
+        return;
+      }
+      this.resourceForm = { name: "", serviceIds: [] };
+      await this.loadResources();
+      this.showToast("Resource added.");
+    },
+
+    async toggleResourceService(resourceId, serviceId, linked) {
+      const resource = this.resources.find((r) => r.id === resourceId);
+      if (!resource) return;
+      const current = new Set(resource.service_ids || []);
+      // Empty link set means "all services" — toggling one on from empty
+      // would narrow it, so start from the full list in that case.
+      const base = current.size === 0 ? this.services.map((s) => s.id) : [...current];
+      const next = linked ? base.filter((id) => id !== serviceId) : [...base, serviceId];
+      const res = await fetch(`/api/resources/${resourceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ serviceIds: [...new Set(next)] }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        this.showToast(data.error || "Could not update link.", "error");
+        return;
+      }
+      await this.loadResources();
+    },
+
+    async toggleResourceActive(resource) {
+      const res = await fetch(`/api/resources/${resource.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ active: !resource.active }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        this.showToast(data.error || "Could not update resource.", "error");
+        return;
+      }
+      await this.loadResources();
+    },
+
+    async deleteResource(id) {
+      if (!confirm("Remove this staff/chair? Upcoming bookings must be cancelled or reassigned first.")) return;
+      const res = await fetch(`/api/resources/${id}`, { method: "DELETE", credentials: "same-origin" });
+      if (res.status === 204 || res.ok) {
+        await this.loadResources();
+        this.showToast("Resource removed.");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        this.showToast(data.error || "Could not remove resource.", "error");
       }
     },
 

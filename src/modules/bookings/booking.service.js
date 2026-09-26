@@ -1,6 +1,7 @@
 // src/modules/bookings/booking.service.js
 const pool = require("../../db/pool");
 const { parseListParams, searchCondition } = require("../../lib/list-query");
+const { linkedResourceIds, pickFreeResource } = require("../services/resource.service");
 
 // Postgres error code for exclusion constraint violation — this is how a
 // double-booking attempt surfaces. Not a magic number pulled from nowhere:
@@ -37,7 +38,7 @@ function checkSlotInWindows(slotStartMin, slotEndMin, durationMinutes, windows) 
   return "ok";
 }
 
-async function createBooking(tenantId, { serviceId, customerName, phone, notes, startTime }) {
+async function createBooking(tenantId, { serviceId, customerName, phone, notes, startTime, resourceId }) {
   const serviceResult = await pool.query(
     `SELECT id, name, duration_minutes, price_minor, currency FROM services WHERE tenant_id = $1 AND id = $2 AND active = true`,
     [tenantId, serviceId]
@@ -100,12 +101,48 @@ async function createBooking(tenantId, { serviceId, customerName, phone, notes, 
     }
   }
 
+  // Resolve which resource takes this booking. Explicit resourceId must
+  // be eligible for the service, otherwise 400. Omitted means auto-assign
+  // the first free eligible resource, otherwise 409. The exclusion
+  // constraint remains the final race guard either way.
+  const linkedIds = await linkedResourceIds(tenantId, service.id);
+  if (linkedIds.length === 0) {
+    throw Object.assign(new Error("No bookable resources configured for this service."), { status: 400 });
+  }
+  let resolvedResourceId;
+  if (resourceId) {
+    if (!linkedIds.map(String).includes(String(resourceId))) {
+      throw Object.assign(new Error("Resource not available for this service."), { status: 400 });
+    }
+    const clash = await pool.query(
+      `SELECT 1 FROM bookings
+       WHERE tenant_id = $1 AND resource_id = $2 AND status != 'cancelled'
+         AND time_range && tstzrange($3, $4) LIMIT 1`,
+      [tenantId, resourceId, start.toISOString(), end.toISOString()]
+    );
+    if (clash.rows.length > 0) {
+      throw Object.assign(new Error("That time slot was just booked by someone else. Please pick another."), { status: 409 });
+    }
+    resolvedResourceId = resourceId;
+  } else {
+    const busy = await pool.query(
+      `SELECT DISTINCT resource_id FROM bookings
+       WHERE tenant_id = $1 AND service_id = $2 AND status != 'cancelled'
+         AND time_range && tstzrange($3, $4)`,
+      [tenantId, service.id, start.toISOString(), end.toISOString()]
+    );
+    resolvedResourceId = pickFreeResource(linkedIds, busy.rows.map((r) => r.resource_id));
+    if (!resolvedResourceId) {
+      throw Object.assign(new Error("That time slot is fully booked. Please pick another."), { status: 409 });
+    }
+  }
+
   try {
     const { rows } = await pool.query(
-      `INSERT INTO bookings (tenant_id, service_id, customer_name, phone, notes, price_minor, currency, time_range)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, tstzrange($8, $9))
-       RETURNING id, customer_name, phone, notes, price_minor, currency, time_range, status, created_at`,
-      [tenantId, service.id, customerName, phone, notes || null, service.price_minor, service.currency, start.toISOString(), end.toISOString()]
+      `INSERT INTO bookings (tenant_id, service_id, resource_id, customer_name, phone, notes, price_minor, currency, time_range)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, tstzrange($9, $10))
+       RETURNING id, resource_id, customer_name, phone, notes, price_minor, currency, time_range, status, created_at`,
+      [tenantId, service.id, resolvedResourceId, customerName, phone, notes || null, service.price_minor, service.currency, start.toISOString(), end.toISOString()]
     );
     return { ...rows[0], serviceName: service.name };
   } catch (err) {
@@ -130,8 +167,9 @@ async function listBookings(tenantId, params = {}) {
   }
   values.push(limit, offset);
   const { rows } = await pool.query(
-    `SELECT b.*, s.name AS service_name
+    `SELECT b.*, s.name AS service_name, r.name AS resource_name
      FROM bookings b JOIN services s ON s.id = b.service_id
+     LEFT JOIN resources r ON r.id = b.resource_id
      WHERE ${conditions.join(" AND ")} ORDER BY b.time_range ${dir}
      LIMIT $${values.length - 1} OFFSET $${values.length}`,
     values

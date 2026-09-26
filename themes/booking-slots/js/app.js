@@ -1,6 +1,6 @@
 // app.js — vanilla JS booking flow: pick service -> pick date/slot -> details -> confirm.
 
-const state = { config: null, services: [], selectedService: null, selectedSlot: null, lastBookingId: null };
+const state = { config: null, services: [], selectedService: null, selectedSlot: null, selectedResource: null, lastBookingId: null };
 
 // Zero-decimal mirror of src/lib/currency.js (static bundles can't require
 // node modules — keep in sync, both point at the Stripe list).
@@ -69,6 +69,8 @@ async function renderServices() {
       list.querySelectorAll(".service-card").forEach((c) => c.classList.remove("selected"));
       card.classList.add("selected");
       state.selectedService = state.services.find((s) => s.id === card.dataset.service);
+      state.selectedResource = null;
+      state.selectedSlot = null;
       document.getElementById("step-slots").classList.remove("hidden");
       const dateInput = document.getElementById("date-picker");
       if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
@@ -77,13 +79,45 @@ async function renderServices() {
   });
 }
 
+// Staff picker renders only when the service has more than one eligible
+// resource (slots response carries the list). Default is "Anyone" — the
+// server auto-assigns the first free resource at booking time.
+function renderStaffPicker(resources) {
+  const row = document.getElementById("staff-row");
+  const list = document.getElementById("staff-list");
+  if (!resources || resources.length < 2) {
+    row.classList.add("hidden");
+    list.innerHTML = "";
+    state.selectedResource = null;
+    return;
+  }
+  row.classList.remove("hidden");
+  const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  list.innerHTML =
+    `<button class="slot-btn${!state.selectedResource ? " selected" : ""}" data-staff="">Anyone</button>` +
+    resources
+      .map((r) => `<button class="slot-btn${state.selectedResource === r.id ? " selected" : ""}" data-staff="${r.id}">${esc(r.name)}</button>`)
+      .join("");
+  list.querySelectorAll("[data-staff]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.selectedResource = btn.dataset.staff || null;
+      state.selectedSlot = null;
+      loadSlots();
+    });
+  });
+}
+
 async function loadSlots() {
   const date = document.getElementById("date-picker").value;
   if (!date || !state.selectedService) return;
-  const res = await fetch(`/api/availability/slots?serviceId=${state.selectedService.id}&date=${date}`);
+  let url = `/api/availability/slots?serviceId=${state.selectedService.id}&date=${date}`;
+  if (state.selectedResource) url += `&resourceId=${encodeURIComponent(state.selectedResource)}`;
+  const res = await fetch(url);
   const data = await res.json();
   const slotList = document.getElementById("slot-list");
   const noSlots = document.getElementById("no-slots");
+
+  renderStaffPicker(data.resources);
 
   if (!res.ok || !data.slots || data.slots.length === 0) {
     slotList.innerHTML = "";
@@ -121,6 +155,7 @@ async function handleBookingSubmit(e) {
         phone: form.phone.value.trim(),
         notes: form.notes.value.trim(),
         startTime: state.selectedSlot,
+        ...(state.selectedResource ? { resourceId: state.selectedResource } : {}),
       }),
     });
     const data = await res.json();
