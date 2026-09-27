@@ -28,6 +28,8 @@ function money(minor, currency = "USD") {
 async function createCheckoutSession({
   clientId,
   clientSecret,
+  publishableKey,
+  secretKey,
   lineItems,
   amountMinor,
   currency = "USD",
@@ -36,7 +38,18 @@ async function createCheckoutSession({
   metadata,
   mode = "sandbox",
 }) {
-  const paypalClient = client(clientId, clientSecret, mode);
+  // Stored credentials arrive as publishableKey/secretKey (same field
+  // names as Stripe); the SDK wants clientId/clientSecret. Accept both
+  // so every caller works without mapping — the webhook verifier already
+  // maps explicitly at its call site.
+  const resolvedId = clientId || publishableKey;
+  const resolvedSecret = clientSecret || secretKey;
+  if (!resolvedId || !resolvedSecret) {
+    const err = new Error("PayPal client credentials are missing.");
+    err.status = 400;
+    throw err;
+  }
+  const paypalClient = client(resolvedId, resolvedSecret, mode);
   const currCode = (currency || "USD").toUpperCase();
 
   let totalAmountValue;

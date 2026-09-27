@@ -5,8 +5,23 @@ const { getConfig, updateConfig, setThemeSlug } = require("./config.service");
 const { VALID_THEMES } = require("../../middleware/theme-server");
 const { VERTICALS, VALID_VERTICALS, getThemesForVertical, isThemeCompatible, THEMES_REGISTRY } = require("../../verticals");
 const { invalidateTenantCache } = require("../../middleware/tenant-resolver");
+const { listProviders } = require("../payments/providers");
+const { getCredentialsSummary } = require("../payments/credentials.service");
 
 const router = express.Router();
+
+// Public — storefronts fetch this to decide which pay buttons to render.
+// Flags only, never secrets: a provider counts as available when the
+// merchant enabled it AND a secret key is stored (otherwise checkout
+// would 400 and the button would be a dead end).
+router.get("/payment-methods", async (req, res) => {
+  const out = {};
+  for (const p of listProviders()) {
+    const s = await getCredentialsSummary(req.tenant.id, p);
+    out[p] = !!(s && s.enabled && s.has_secret_key);
+  }
+  res.json(out);
+});
 
 // Public — the storefront frontend fetches this to render brand copy/colors.
 router.get("/", async (req, res) => {

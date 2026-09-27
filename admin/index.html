@@ -857,6 +857,32 @@
               <span class="badge" :class="stripeStatus.enabled ? 'confirmed' : 'pending'" x-text="stripeStatus.enabled ? 'Enabled' : 'Not enabled'"></span>
             </div>
           </div>
+          <div class="card">
+            <h3 style="margin-top:0;">PayPal</h3>
+            <p class="hint" style="margin-top:0;">Paste your PayPal REST app credentials here. Get them from your PayPal Dashboard → Apps &amp; Credentials.</p>
+            <div class="field-grid">
+              <div class="field"><label for="paypal-pk">Client ID</label><input id="paypal-pk" x-model="paypalForm.publishableKey" placeholder="AY…" /></div>
+              <div class="field"><label for="paypal-sk">Secret</label><input id="paypal-sk" type="password" x-model="paypalForm.secretKey" :placeholder="paypalStatus.has_secret_key ? 'Already set — leave blank to keep it' : 'EO…'" /></div>
+            </div>
+            <div class="field-grid">
+              <div class="field"><label for="paypal-whsec">Webhook ID</label><input id="paypal-whsec" type="password" x-model="paypalForm.webhookSecret" :placeholder="paypalStatus.has_webhook_secret ? 'Already set — leave blank to keep it' : 'WH-…'" /></div>
+              <div class="field"><label for="paypal-mode">Mode</label>
+                <select id="paypal-mode" x-model="paypalForm.mode">
+                  <option value="test">Test (sandbox)</option>
+                  <option value="live">Live</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="paypal-webhook-url">Your webhook URL (paste this into your PayPal app's Webhooks settings)</label>
+              <input id="paypal-webhook-url" readonly :value="paypalStatus.webhookUrl" onclick="this.select()" />
+            </div>
+            <div class="cluster">
+              <button class="btn" @click="savePaypalCredentials(true)" :disabled="paypalSaving">Save &amp; enable</button>
+              <button class="btn ghost" @click="savePaypalCredentials(false)" :disabled="paypalSaving">Save without enabling</button>
+              <span class="badge" :class="paypalStatus.enabled ? 'confirmed' : 'pending'" x-text="paypalStatus.enabled ? 'Enabled' : 'Not enabled'"></span>
+            </div>
+          </div>
         </div>
 
         <!-- CUSTOM DOMAIN -->

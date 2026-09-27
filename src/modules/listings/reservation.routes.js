@@ -33,7 +33,8 @@ router.post("/:id/checkout", publicWriteLimiter, async (req, res) => {
     return res.status(400).json({ error: "successUrl and cancelUrl are required." });
   }
   try {
-    const result = await startCheckout(req.tenant.id, req.params.id, { successUrl, cancelUrl });
+    const { provider } = req.body || {};
+    const result = await startCheckout(req.tenant.id, req.params.id, { successUrl, cancelUrl, provider });
     res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.status ? err.message : "Could not start checkout." });

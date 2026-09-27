@@ -190,47 +190,15 @@ function showConfirm(bookingId, paid) {
   document.getElementById("step-details").classList.add("hidden");
   document.getElementById("step-confirm").classList.remove("hidden");
   document.getElementById("confirm-paid").classList.toggle("hidden", !paid);
-  document.getElementById("pay-now").classList.toggle("hidden", !!paid);
-  document.getElementById("pay-error").classList.add("hidden");
+  const slot = document.getElementById("pay-now-slot");
+  slot.classList.toggle("hidden", !!paid);
+  // Shared component renders card/PayPal buttons per enabled methods.
+  if (!paid && window.AfrexpayCheckout) {
+    window.AfrexpayCheckout.render(slot, { entityType: "booking", entityId: bookingId });
+  }
   if (!paid && state.selectedService && state.selectedSlot) {
     document.getElementById("confirm-detail").textContent =
       `${state.selectedService.name} on ${new Date(state.selectedSlot).toLocaleString()}. We'll be in touch to confirm.`;
-  }
-}
-
-// Starts a Stripe Checkout session for the just-created booking and hands
-// the browser to Stripe's hosted page. Additive: the booking already
-// exists and holds its slot — this only adds an optional card payment.
-async function handlePayNow() {
-  const bookingId = state.lastBookingId;
-  if (!bookingId) return;
-  const payBtn = document.getElementById("pay-now");
-  const errorEl = document.getElementById("pay-error");
-  errorEl.classList.add("hidden");
-  payBtn.disabled = true;
-  payBtn.textContent = "REDIRECTING TO STRIPE...";
-
-  try {
-    const returnUrl = new URL(window.location.href);
-    returnUrl.search = "";
-    returnUrl.searchParams.set("booking", bookingId);
-    const successUrl = new URL(returnUrl); successUrl.searchParams.set("paid", "1");
-    const cancelUrl = returnUrl.toString();
-
-    const res = await fetch(`/api/bookings/${bookingId}/checkout`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ successUrl: successUrl.toString(), cancelUrl }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Could not start checkout.");
-
-    window.location.href = data.checkoutUrl;
-  } catch (err) {
-    errorEl.textContent = err.message;
-    errorEl.classList.remove("hidden");
-    payBtn.disabled = false;
-    payBtn.textContent = "PAY NOW WITH CARD";
   }
 }
 
@@ -279,7 +247,6 @@ async function init() {
 
   document.getElementById("date-picker").addEventListener("change", loadSlots);
   document.getElementById("booking-form").addEventListener("submit", handleBookingSubmit);
-  document.getElementById("pay-now").addEventListener("click", handlePayNow);
   document.getElementById("book-another").addEventListener("click", resetToSearch);
 
   // If Stripe redirected back here (successUrl/cancelUrl both point at

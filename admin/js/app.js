@@ -109,6 +109,11 @@ function adminApp() {
     stripeForm: { publishableKey: "", secretKey: "", webhookSecret: "", mode: "test" },
     stripeStatus: { enabled: false, has_secret_key: false, has_webhook_secret: false, webhookUrl: "" },
     stripeSaving: false,
+    // payments (PayPal) — same shape; stored as publishableKey = Client ID,
+    // secretKey = Secret, webhookSecret = webhook ID (see paypal.provider.js)
+    paypalForm: { publishableKey: "", secretKey: "", webhookSecret: "", mode: "test" },
+    paypalStatus: { enabled: false, has_secret_key: false, has_webhook_secret: false, webhookUrl: "" },
+    paypalSaving: false,
 
     // custom domain
     domainStatus: { custom_domain: null, custom_domain_verified_at: null },
@@ -179,7 +184,7 @@ function adminApp() {
       await Promise.all([
         this.loadConfig(), this.loadVerticals(), this.loadProducts(),
         this.loadOrders(), this.loadThemes(), this.loadStripeStatus(),
-        this.loadDomainStatus(),
+        this.loadPaypalStatus(), this.loadDomainStatus(),
       ]);
       if (this.tabVisible("services")) {
         await Promise.all([this.loadServices(), this.loadResources(), this.loadWeeklyHours(), this.loadExceptions(), this.loadBookings()]);
@@ -1264,6 +1269,46 @@ function adminApp() {
         this.showToast(err.message, "error");
       } finally {
         this.stripeSaving = false;
+      }
+    },
+
+    // ---- payments (PayPal) — mirrors Stripe above; backend validates
+    // provider generically, so only the labels and endpoint path differ.
+    async loadPaypalStatus() {
+      try {
+        const res = await fetch("/api/payments/credentials/paypal", { credentials: "same-origin" });
+        if (res.ok) this.paypalStatus = await res.json();
+      } catch { /* status badge keeps its default; user can retry by revisiting */ }
+    },
+
+    async savePaypalCredentials(enable) {
+      this.paypalSaving = true;
+      try {
+        const body = {
+          mode: this.paypalForm.mode,
+          enabled: enable,
+        };
+        // Same blank-means-keep contract as Stripe.
+        if (this.paypalForm.publishableKey) body.publishableKey = this.paypalForm.publishableKey;
+        if (this.paypalForm.secretKey) body.secretKey = this.paypalForm.secretKey;
+        if (this.paypalForm.webhookSecret) body.webhookSecret = this.paypalForm.webhookSecret;
+
+        const res = await fetch("/api/payments/credentials/paypal", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Could not save PayPal settings.");
+
+        this.paypalForm.secretKey = "";
+        this.paypalForm.webhookSecret = "";
+        await this.loadPaypalStatus();
+        this.showToast(enable ? "PayPal connected and enabled." : "PayPal settings saved.");
+      } catch (err) {
+        this.showToast(err.message, "error");
+      } finally {
+        this.paypalSaving = false;
       }
     },
 

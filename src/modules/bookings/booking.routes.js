@@ -44,7 +44,8 @@ router.post("/:id/checkout", publicWriteLimiter, async (req, res) => {
   }
 
   try {
-    const { checkoutUrl } = await startBookingCheckout(req.tenant.id, req.params.id, { successUrl, cancelUrl });
+    const { provider } = req.body || {};
+    const { checkoutUrl } = await startBookingCheckout(req.tenant.id, req.params.id, { successUrl, cancelUrl, provider });
     res.json({ checkoutUrl });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.status ? err.message : "Could not start checkout." });

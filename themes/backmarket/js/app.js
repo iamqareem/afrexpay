@@ -210,8 +210,12 @@ function openConfirm(orderId, paid) {
   // Purely a UX confirmation — the order's real payment_status is set
   // server-side by the Stripe webhook, never by this client-side redirect.
   document.getElementById("confirm-paid").classList.toggle("hidden", !paid);
-  document.getElementById("pay-now").classList.toggle("hidden", !!paid);
-  document.getElementById("pay-error").classList.add("hidden");
+  const slot = document.getElementById("pay-now-slot");
+  slot.classList.toggle("hidden", !!paid);
+  // Shared component renders card/PayPal buttons per enabled methods.
+  if (!paid && window.AfrexpayCheckout) {
+    window.AfrexpayCheckout.render(slot, { entityType: "order", entityId: orderId });
+  }
   document.getElementById("confirm-overlay").classList.remove("hidden");
   document.getElementById("confirm-overlay").classList.add("flex");
 }
@@ -262,47 +266,6 @@ async function handleCheckoutSubmit(e) {
   }
 }
 
-// Starts a Stripe Checkout session for the just-placed order and hands
-// the browser to Stripe's hosted page. Additive: the cash order already
-// exists and stays valid — this only adds an optional card payment.
-async function handlePayNow() {
-  const orderId = state.lastOrderId;
-  if (!orderId) return;
-  const payBtn = document.getElementById("pay-now");
-  const errorEl = document.getElementById("pay-error");
-  errorEl.classList.add("hidden");
-  payBtn.disabled = true;
-  payBtn.textContent = "REDIRECTING TO STRIPE...";
-
-  try {
-    // Round-trip back to this same storefront after Stripe's hosted
-    // checkout — the order id in the query string reopens the confirm
-    // overlay with a banner. The order's actual payment_status is only
-    // ever set by the webhook, server-side — this redirect is just UX
-    // feedback, never the source of truth for whether payment succeeded.
-    const returnUrl = new URL(window.location.href);
-    returnUrl.search = "";
-    returnUrl.searchParams.set("order", orderId);
-    const successUrl = new URL(returnUrl); successUrl.searchParams.set("paid", "1");
-    const cancelUrl = returnUrl.toString();
-
-    const res = await fetch(`/api/orders/${orderId}/checkout`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ successUrl: successUrl.toString(), cancelUrl }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Could not start checkout.");
-
-    window.location.href = data.checkoutUrl;
-  } catch (err) {
-    errorEl.textContent = err.message;
-    errorEl.classList.remove("hidden");
-    payBtn.disabled = false;
-    payBtn.textContent = "PAY NOW WITH CARD";
-  }
-}
-
 async function init() {
   const configRes = await fetch("/api/config");
   const { config } = await configRes.json();
@@ -319,7 +282,6 @@ async function init() {
   document.getElementById("checkout-open").addEventListener("click", openCheckout);
   document.getElementById("checkout-close").addEventListener("click", closeCheckout);
   document.getElementById("checkout-form").addEventListener("submit", handleCheckoutSubmit);
-  document.getElementById("pay-now").addEventListener("click", handlePayNow);
   document.getElementById("confirm-close").addEventListener("click", closeConfirm);
 
   // If Stripe redirected back here (successUrl/cancelUrl both point at

@@ -86,9 +86,34 @@ async function showDetail(listingId) {
     reservationPanel.classList.remove("hidden");
     document.getElementById("deposit-amount").textContent = money(listing.deposit_amount_minor, listing.currency);
     document.getElementById("reservation-form").reset();
+    renderPayMethodOptions();
   } else {
     reservationPanel.classList.add("hidden");
   }
+}
+
+// Payment-method radios for the immediate-deposit flow. Uses the shared
+// component's method flags; hidden entirely when 0-1 methods are enabled
+// (single method is preselected silently).
+async function renderPayMethodOptions() {
+  const row = document.getElementById("pay-method-row");
+  const box = document.getElementById("pay-method-options");
+  row.classList.add("hidden");
+  box.innerHTML = "";
+  if (!window.AfrexpayCheckout) return;
+  const methods = await window.AfrexpayCheckout.methods();
+  const available = ["stripe", "paypal"].filter((p) => methods && methods[p]);
+  if (available.length < 2) return;
+  const labels = { stripe: "Card", paypal: "PayPal" };
+  row.classList.remove("hidden");
+  box.innerHTML = available
+    .map((p, i) => `<label class="inline-flex items-center gap-1.5"><input type="radio" name="pay-provider" value="${p}"${i === 0 ? " checked" : ""} />${labels[p]}</label>`)
+    .join("");
+}
+
+function selectedProvider() {
+  const picked = document.querySelector('input[name="pay-provider"]:checked');
+  return picked ? picked.value : undefined; // undefined → backend default (stripe)
 }
 
 async function handleReservationSubmit(e) {
@@ -128,7 +153,7 @@ async function handleReservationSubmit(e) {
     const checkoutRes = await fetch(`/api/listing-reservations/${reservation.id}/checkout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ successUrl: successUrl.toString(), cancelUrl }),
+      body: JSON.stringify({ successUrl: successUrl.toString(), cancelUrl, provider: selectedProvider() }),
     });
     const checkout = await checkoutRes.json();
     if (!checkoutRes.ok) throw new Error(checkout.error || "Could not start checkout.");

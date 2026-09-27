@@ -463,8 +463,7 @@ class YeezyCheckout extends HTMLElement {
           <h3 class="yeezy-font text-2xl font-bold tracking-tightest mb-4">ORDER #<span id="cf-id"></span></h3>
           <p id="cf-paid" class="yeezy-font text-sm font-bold mb-4 hidden">Payment received ✓ — thanks!</p>
           <p class="text-sm text-[#000000b3] mb-6">We'll reach out to confirm delivery and payment.</p>
-          <p id="cf-pay-error" class="text-red-500 text-sm hidden mb-4"></p>
-          <button id="cf-pay" class="w-full bg-[#000] text-[#fff] py-4 hover:bg-[#000] transition-colors text-sm tracking-widest yeezy-font border border-[#000] mb-3">PAY NOW WITH CARD</button>
+          <div id="cf-pay-slot" class="mb-3"></div>
           <button id="cf-close" class="w-full bg-[#fff] text-[#000] py-4 hover:bg-[#000] hover:text-[#fff] transition-colors text-sm tracking-widest yeezy-font border border-[#000]">DONE</button>
         </div>
       </div>
@@ -503,8 +502,12 @@ class YeezyCheckout extends HTMLElement {
           // Paid banner is UX feedback only — the order's real
           // payment_status is set server-side by the Stripe webhook.
           this.querySelector('#cf-paid').classList.toggle('hidden', !paid);
-          this.querySelector('#cf-pay').classList.toggle('hidden', paid);
-          this.querySelector('#cf-pay-error').classList.add('hidden');
+          const slot = this.querySelector('#cf-pay-slot');
+          slot.classList.toggle('hidden', paid);
+          // Shared component renders card/PayPal buttons per enabled methods.
+          if (!paid && window.AfrexpayCheckout) {
+            window.AfrexpayCheckout.render(slot, { entityType: "order", entityId: id });
+          }
           cfOverlay.classList.remove('hidden');
           cfOverlay.classList.add('flex');
         } else {
@@ -555,41 +558,6 @@ class YeezyCheckout extends HTMLElement {
       }
     });
 
-    // Optional card payment on top of the existing cash order — starts a
-    // Stripe Checkout session and hands the browser to Stripe's hosted
-    // page. The cash order stays valid regardless of what happens next.
-    this.querySelector('#cf-pay').addEventListener('click', async () => {
-      const orderId = store.get('confirmedOrderId');
-      if (!orderId) return;
-      const payBtn = this.querySelector('#cf-pay');
-      const payError = this.querySelector('#cf-pay-error');
-      payError.classList.add('hidden');
-      payBtn.disabled = true;
-      payBtn.textContent = "REDIRECTING TO STRIPE...";
-
-      try {
-        const returnUrl = new URL(window.location.href);
-        returnUrl.search = "";
-        returnUrl.searchParams.set("order", orderId);
-        const successUrl = new URL(returnUrl); successUrl.searchParams.set("paid", "1");
-        const cancelUrl = returnUrl.toString();
-
-        const res = await fetch(`/api/orders/${orderId}/checkout`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ successUrl: successUrl.toString(), cancelUrl }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Could not start checkout.");
-
-        window.location.href = data.checkoutUrl;
-      } catch (err) {
-        payError.textContent = err.message;
-        payError.classList.remove('hidden');
-        payBtn.disabled = false;
-        payBtn.textContent = "PAY NOW WITH CARD";
-      }
-    });
 
     // If Stripe redirected back here (successUrl/cancelUrl both point at
     // this same page with an `order` param), reopen the confirmation —

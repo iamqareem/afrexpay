@@ -75,9 +75,7 @@
       <h2 class="font-display text-2xl mb-2">Reserved ✓</h2>
       <p class="text-muted" id="confirm-detail"></p>
       <p id="confirm-paid" class="font-bold mt-3 hidden" style="color:#3f7d4a;">Payment received ✓ — thanks!</p>
-      <p id="pay-error" class="text-sm hidden mt-3" style="color:#e5534b;"></p>
-      <button id="pay-now" type="button" class="w-full bg-accent text-ink font-bold py-3 rounded-md mt-4">PAY NOW WITH CARD</button>
-      <button id="book-another" type="button" class="w-full border border-surface2 py-3 rounded-md mt-3 text-sm hover:border-accent transition-colors">Book another experience</button>
+      <div id="pay-now-slot" class="mb-3"></div>      <button id="book-another" type="button" class="w-full border border-surface2 py-3 rounded-md mt-3 text-sm hover:border-accent transition-colors">Book another experience</button>
     </div>
   </main>
 
@@ -85,6 +83,7 @@
     <p id="footer-text" class="text-muted text-xs"></p>
   </footer>
 
+  <script src="/js/afrexpay-checkout.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

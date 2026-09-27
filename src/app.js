@@ -69,6 +69,14 @@ app.use(cookieParser());
 // one yet) — mounted before the resolver, on the base domain only.
 app.use("/api/auth", authRoutes);
 
+// Shared pay-now component for every storefront theme. Served on ALL hosts
+// (base + tenant subdomains) before tenant resolution: it carries no tenant
+// data, and themes reference it as /js/afrexpay-checkout.js. A per-theme
+// copy would re-create the drift this file exists to kill.
+app.get("/js/afrexpay-checkout.js", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "js", "afrexpay-checkout.js"));
+});
+
 // Requests to the bare base domain (afrexpay.com, no subdomain) get the
 // marketing/signup site, not a tenant storefront — checked before tenant
 // resolution so it never gets caught by the "no store found" 404 below.
