@@ -96,7 +96,7 @@ async function renderProducts() {
       const img = photo ? `/media/${photo}` : null;
       return `
     <div class="souk-card">
-      ${img ? `<img src="${img}" alt="${esc(p.name)}" class="w-full aspect-[4/5] object-cover" />` : `<div class="w-full aspect-[4/5] bg-surface2"></div>`}
+      ${img ? `<img src="${img}" alt="${esc(p.name)}" loading="lazy" onerror="this.style.display='none'" class="w-full aspect-[4/5] object-cover" />` : `<div class="w-full aspect-[4/5] bg-surface2"></div>`}
       <div class="px-5 pt-4 pb-3">
         ${p.category ? `<p class="font-mono text-[10px] tracking-widest2 text-gold uppercase">${esc(p.category)}</p>` : ""}
         <h3 class="font-display text-xl tracking-tightest text-paper mt-1">${esc(p.name)}</h3>

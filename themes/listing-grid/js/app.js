@@ -34,7 +34,7 @@ function renderGrid() {
       (l) => `
     <div class="listing-card" data-id="${l.id}">
       <div class="w-full aspect-video bg-surface2">
-        ${l.thumbnail_path ? `<img src="/media/${l.thumbnail_path}" class="w-full h-full object-cover" loading="lazy" />` : ""}
+        ${l.thumbnail_path ? `<img src="/media/${l.thumbnail_path}" alt="${l.title}" loading="lazy" onerror="this.style.display='none'" class="w-full h-full object-cover" />` : ""}
       </div>
       <div class="p-4">
         <span class="listing-badge">${l.listing_type === "rent" ? "FOR RENT" : "FOR SALE"}</span>
@@ -69,7 +69,7 @@ async function showDetail(listingId) {
   const photos = photosRes.ok ? await photosRes.json() : [];
   const photosEl = document.getElementById("detail-photos");
   photosEl.innerHTML = photos.length
-    ? photos.map((p) => `<img src="/media/${p.storage_path}" class="w-full aspect-video object-cover rounded-md" />`).join("")
+    ? photos.map((p) => `<img src="/media/${p.storage_path}" alt="Listing photo" loading="lazy" onerror="this.style.display='none'" class="w-full aspect-video object-cover rounded-md" />`).join("")
     : `<div class="col-span-2 aspect-video bg-surface2 rounded-md"></div>`;
 
   document.getElementById("inquiry-form").classList.remove("hidden");

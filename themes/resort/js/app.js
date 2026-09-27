@@ -75,7 +75,7 @@ function renderServices() {
     <div class="service-card" data-service="${s.id}">
       <div class="relative">
         ${cover
-          ? `<img src="/media/${cover}" alt="${s.name}" class="w-full aspect-[16/10] object-cover" loading="lazy" />`
+          ? `<img src="/media/${cover}" alt="${s.name}" class="w-full aspect-[16/10] object-cover" loading="lazy" onerror="this.style.display='none'" />`
           : `<div class="w-full aspect-[16/10] bg-surface2 flex items-center justify-center"><span class="font-display text-4xl text-muted">≈</span></div>`}
         ${photos.length > 1 ? `<span class="photo-badge">+${photos.length - 1} photos</span>` : ""}
       </div>

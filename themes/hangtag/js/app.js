@@ -60,7 +60,7 @@ async function renderProducts() {
       return `
     <div class="tag-card">
       <div class="tag-hole"></div>
-      ${img ? `<img src="${img}" alt="${p.name}" class="w-full aspect-square object-cover" />` : `<div class="w-full aspect-square bg-surface2"></div>`}
+      ${img ? `<img src="${img}" alt="${p.name}" loading="lazy" onerror="this.style.display='none'" class="w-full aspect-square object-cover" />` : `<div class="w-full aspect-square bg-surface2"></div>`}
       <div class="tag-perf px-4 pt-4 pb-3">
         ${p.category ? `<p class="font-mono text-[10px] tracking-widest2 text-muted uppercase">${p.category}</p>` : ""}
         <h3 class="font-display text-base tracking-tightest text-paper mt-1">${p.name}</h3>

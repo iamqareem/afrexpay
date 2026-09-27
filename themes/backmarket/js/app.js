@@ -77,7 +77,7 @@ async function renderProducts() {
     return `
     <div class="product-card">
     <div class="relative overflow-hidden bg-[#F7F7F8]">
-    ${img ? `<img src="${img}" alt="${p.name}" class="w-full aspect-square object-cover transition-transform duration-300 hover:scale-105" />` : `<div class="w-full aspect-square bg-[#F7F7F8] flex items-center justify-center text-[#6B6B6B] text-sm">No image</div>`}
+    ${img ? `<img src="${img}" alt="${p.name}" loading="lazy" onerror="this.style.display='none'" class="w-full aspect-square object-cover transition-transform duration-300 hover:scale-105" />` : `<div class="w-full aspect-square bg-[#F7F7F8] flex items-center justify-center text-[#6B6B6B] text-sm">No image</div>`}
     <div class="absolute top-3 left-3">
     <span class="condition-badge condition-${condition}">${conditionLabel}</span>
     </div>

@@ -230,7 +230,7 @@ class AutoProductCard extends HTMLElement {
     this.innerHTML = `
       <div class="card cursor-pointer group h-full flex flex-col">
         <div class="aspect-[4/3] bg-surfaceVariant p-8 flex items-center justify-center relative overflow-hidden rounded-t-4xl">
-          ${this._img ? `<img src="${this._img}" class="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500" />` : `<div class="text-onSurfaceVariant text-sm font-medium">NO IMAGE</div>`}
+          ${this._img ? `<img src="${this._img}" alt="${this._product.name}" loading="lazy" onerror="this.style.display='none'" class="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500" />` : `<div class="text-onSurfaceVariant text-sm font-medium">NO IMAGE</div>`}
         </div>
         <div class="p-6 md:p-8 flex flex-col flex-1 bg-surface">
           ${this._product.category ? `<span class="text-xs font-bold text-primary uppercase tracking-wider mb-2">${this._product.category}</span>` : ''}
@@ -257,7 +257,7 @@ class AutoQuickView extends HTMLElement {
       <div id="qv-overlay" class="fixed inset-0 bg-onSurface/40 z-[60] hidden items-center justify-center px-4 transition-opacity opacity-0 backdrop-blur-sm">
         <div id="qv-modal" class="bg-surface rounded-4xl max-w-5xl w-full max-h-[90vh] overflow-y-auto scale-95 transition-transform duration-300 flex flex-col lg:flex-row shadow-float border border-surfaceVariant">
           <div class="w-full lg:w-3/5 bg-surfaceVariant p-10 flex items-center justify-center min-h-[40vh] rounded-t-4xl lg:rounded-l-4xl lg:rounded-tr-none">
-             <img id="qv-img" src="" class="w-full h-full object-contain mix-blend-multiply drop-shadow-2xl" />
+             <img id="qv-img" src="" alt="Product photo" onerror="this.style.display='none'" class="w-full h-full object-contain mix-blend-multiply drop-shadow-2xl" />
           </div>
           <div class="w-full lg:w-2/5 p-10 relative flex flex-col">
             <button id="qv-close" class="absolute top-6 right-6 w-10 h-10 bg-surfaceVariant hover:bg-onSurfaceVariant hover:text-surface rounded-full flex items-center justify-center transition-colors text-xl leading-none">&times;</button>

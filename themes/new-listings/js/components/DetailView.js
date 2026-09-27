@@ -23,7 +23,7 @@ export default class DetailView {
       const res = await fetch(`/api/media/for/listing/${l.id}`);
       const photos = res.ok ? await res.json() : [];
       photosHtml = photos.length
-        ? photos.map(p => `<img src="/media/${p.storage_path}" class="w-full aspect-video object-cover rounded-md" />`).join('')
+        ? photos.map(p => `<img src="/media/${p.storage_path}" alt="Listing photo" loading="lazy" onerror="this.style.display='none'" class="w-full aspect-video object-cover rounded-md" />`).join('')
         : `<div class="col-span-2 aspect-video bg-surface2 rounded-md"></div>`;
     } catch (e) {
       photosHtml = `<div class="col-span-2 aspect-video bg-surface2 rounded-md"></div>`;

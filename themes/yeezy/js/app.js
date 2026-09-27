@@ -214,7 +214,7 @@ class YeezyProductCard extends HTMLElement {
     this.innerHTML = `
       <div class="product-card group cursor-pointer h-full flex flex-col">
         <div class="bg-[#f5f5f5] aspect-square overflow-hidden relative">
-          ${this._img ? `<img src="${this._img}" alt="${this._product.name}" class="w-full h-full object-cover transition-transform duration-500" />` : `<div class="w-full h-full flex items-center justify-center text-[#000000b3] text-xs">NO IMAGE</div>`}
+          ${this._img ? `<img src="${this._img}" alt="${this._product.name}" loading="lazy" onerror="this.style.display='none'" class="w-full h-full object-cover transition-transform duration-500" />` : `<div class="w-full h-full flex items-center justify-center text-[#000000b3] text-xs">NO IMAGE</div>`}
         </div>
         <div class="pt-3 pb-1 px-0 flex-1 flex flex-col">
           <p class="yeezy-font text-sm tracking-tightest text-[#000]">${this._product.name}</p>
@@ -241,7 +241,7 @@ class YeezyDetail extends HTMLElement {
         </button>
         <div id="detail-content" class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 hidden">
           <div class="bg-[#f5f5f5] aspect-square flex items-center justify-center overflow-hidden">
-            <img id="d-img" src="" class="w-full h-full object-cover" />
+            <img id="d-img" src="" alt="Product photo" onerror="this.style.display='none'" class="w-full h-full object-cover" />
           </div>
           <div class="flex flex-col justify-center">
             <p id="d-cat" class="text-xs text-[#000000b3] tracking-widest mb-2 yeezy-font"></p>

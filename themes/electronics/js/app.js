@@ -278,7 +278,7 @@ class TechProductCard extends HTMLElement {
     this.innerHTML = `
       <div class="bg-surface rounded-lg overflow-hidden border border-surface2 hover:border-gold transition-colors flex flex-col h-full cursor-pointer group relative">
         <div class="aspect-square bg-ink p-4 flex items-center justify-center relative overflow-hidden">
-          ${this._img ? `<img src="${this._img}" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300" />` : `<div class="text-muted text-xs">NO IMAGE</div>`}
+          ${this._img ? `<img src="${this._img}" alt="${this._product.name}" loading="lazy" onerror="this.style.display='none'" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300" />` : `<div class="text-muted text-xs">NO IMAGE</div>`}
           <div class="absolute inset-0 bg-ink/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
              <span class="bg-gold text-ink font-bold px-4 py-2 rounded-md text-sm">QUICK VIEW</span>
           </div>
@@ -304,7 +304,7 @@ class TechQuickView extends HTMLElement {
       <div id="qv-overlay" class="fixed inset-0 bg-black/80 z-[60] hidden items-center justify-center px-4 transition-opacity opacity-0 backdrop-blur-sm">
         <div id="qv-modal" class="bg-surface border border-surface2 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto scale-95 transition-transform duration-300 flex flex-col md:flex-row shadow-2xl">
           <div class="w-full md:w-1/2 bg-ink p-8 flex items-center justify-center min-h-[300px]">
-             <img id="qv-img" src="" class="w-full h-auto object-contain max-h-[60vh]" />
+             <img id="qv-img" src="" alt="Product photo" onerror="this.style.display='none'" class="w-full h-auto object-contain max-h-[60vh]" />
           </div>
           <div class="w-full md:w-1/2 p-8 relative flex flex-col">
             <button id="qv-close" class="absolute top-4 right-4 text-muted hover:text-paper text-3xl leading-none">&times;</button>

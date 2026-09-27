@@ -54,7 +54,7 @@ async function renderServices() {
       return `
     <div class="service-card" data-service="${s.id}">
       <div class="relative">
-        ${cover ? `<img src="/media/${cover}" class="w-full aspect-video object-cover rounded-md mb-3" />` : ""}
+        ${cover ? `<img src="/media/${cover}" alt="${s.name}" loading="lazy" onerror="this.style.display='none'" class="w-full aspect-video object-cover rounded-md mb-3" />` : ""}
         ${photos.length > 1 ? `<span style="position:absolute;bottom:1rem;right:0.75rem;background:rgba(0,0,0,0.65);color:#fff;font-size:0.7rem;font-weight:700;padding:0.15rem 0.5rem;border-radius:999px;">+${photos.length - 1}</span>` : ""}
       </div>
       <h3 class="font-semibold">${s.name}</h3>
