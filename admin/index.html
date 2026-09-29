@@ -349,20 +349,40 @@
           <!-- photo manager — only shown once a product exists to attach photos to -->
           <div class="card" x-show="editingProductId">
             <h3>Photos</h3>
-            <input type="file" accept="image/jpeg,image/png,image/webp" @change="uploadProductPhoto($event, editingProductId)" class="mb-md" />
+            <div class="photo-dropzone mb-md" :class="{ dragover: photoDragOver }"
+                 @dragover.prevent="photoDragOver = true"
+                 @dragleave="photoDragOver = false"
+                 @drop.prevent="dropPhotoFiles($event, 'product', editingProductId)">
+              <input type="file" id="product-photo-input" accept="image/jpeg,image/png,image/webp" multiple @change="uploadProductPhoto($event, editingProductId)" class="visually-hidden" />
+              <label for="product-photo-input">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12V4m0 0L5 7m3-3 3 3"/><path d="M2.5 12v1.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V12"/></svg>
+                <strong>Drop photos here or click to browse</strong>
+                <span>JPG, PNG or WebP, up to 2MB each — first photo is the cover</span>
+              </label>
+            </div>
+            <p class="photo-uploading" x-show="uploadingPhotos"><span class="spinner" aria-hidden="true"></span>Uploading…</p>
             <div class="photo-grid">
               <template x-for="(photo, idx) in productPhotos" :key="photo.id">
-                <div class="photo-thumb">
-                  <img :src="'/media/' + photo.storage_path">
-                  <div class="photo-actions">
-                    <button type="button" class="row-actions" aria-label="Move photo earlier" @click="moveProductPhoto(idx, -1)" :disabled="idx === 0">&uarr;</button>
-                    <button type="button" class="row-actions" aria-label="Move photo later" @click="moveProductPhoto(idx, 1)" :disabled="idx === productPhotos.length - 1">&darr;</button>
-                    <button type="button" class="row-actions danger" aria-label="Delete photo" @click="deleteProductPhoto(photo.id)">&times;</button>
+                <div class="photo-thumb"
+                     :class="{ dragging: dragPhoto && dragPhoto.list === 'productPhotos' && dragPhoto.index === idx, 'drop-target': dropTarget && dropTarget.list === 'productPhotos' && dropTarget.index === idx }"
+                     draggable="true"
+                     @dragstart="photoDragStart('productPhotos', idx, $event)"
+                     @dragenter="photoDragEnter('productPhotos', idx)"
+                     @dragover.prevent
+                     @drop.prevent="dropPhoto('productPhotos', idx)"
+                     @dragend="photoDragEnd()">
+                  <img :src="'/media/' + photo.storage_path" :alt="'Photo ' + (idx + 1) + ' of ' + productPhotos.length" loading="lazy" />
+                  <span class="photo-pos" x-text="idx + 1"></span>
+                  <span class="photo-cover" x-show="idx === 0">Cover</span>
+                  <div class="photo-overlay">
+                    <button type="button" class="photo-icon-btn" aria-label="Move photo earlier" @click="moveProductPhoto(idx, -1)" :disabled="idx === 0"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>
+                    <button type="button" class="photo-icon-btn" aria-label="Move photo later" @click="moveProductPhoto(idx, 1)" :disabled="idx === productPhotos.length - 1"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg></button>
+                    <button type="button" class="photo-icon-btn danger" aria-label="Delete photo" @click="deleteProductPhoto(photo.id)"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
                   </div>
                 </div>
               </template>
             </div>
-            <p class="hint" x-show="productPhotos.length === 0">No photos yet — add one above.</p>
+            <p class="hint" x-show="productPhotos.length === 0">No photos yet — add one above. Drag to reorder once you have several.</p>
           </div>
 
           <div class="card">
@@ -480,20 +500,40 @@
           <!-- photo manager — only shown once a service exists to attach photos to -->
           <div class="card" x-show="editingServiceId">
             <h3>Photos</h3>
-            <input type="file" accept="image/jpeg,image/png,image/webp" @change="uploadServicePhoto($event, editingServiceId)" class="mb-md" />
+            <div class="photo-dropzone mb-md" :class="{ dragover: photoDragOver }"
+                 @dragover.prevent="photoDragOver = true"
+                 @dragleave="photoDragOver = false"
+                 @drop.prevent="dropPhotoFiles($event, 'service', editingServiceId)">
+              <input type="file" id="service-photo-input" accept="image/jpeg,image/png,image/webp" multiple @change="uploadServicePhoto($event, editingServiceId)" class="visually-hidden" />
+              <label for="service-photo-input">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12V4m0 0L5 7m3-3 3 3"/><path d="M2.5 12v1.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V12"/></svg>
+                <strong>Drop photos here or click to browse</strong>
+                <span>JPG, PNG or WebP, up to 2MB each — first photo is the cover</span>
+              </label>
+            </div>
+            <p class="photo-uploading" x-show="uploadingPhotos"><span class="spinner" aria-hidden="true"></span>Uploading…</p>
             <div class="photo-grid">
               <template x-for="(photo, idx) in servicePhotos" :key="photo.id">
-                <div class="photo-thumb">
-                  <img :src="'/media/' + photo.storage_path">
-                  <div class="photo-actions">
-                    <button type="button" class="row-actions" aria-label="Move photo earlier" @click="moveServicePhoto(idx, -1)" :disabled="idx === 0">&uarr;</button>
-                    <button type="button" class="row-actions" aria-label="Move photo later" @click="moveServicePhoto(idx, 1)" :disabled="idx === servicePhotos.length - 1">&darr;</button>
-                    <button type="button" class="row-actions danger" aria-label="Delete photo" @click="deleteServicePhoto(photo.id)">&times;</button>
+                <div class="photo-thumb"
+                     :class="{ dragging: dragPhoto && dragPhoto.list === 'servicePhotos' && dragPhoto.index === idx, 'drop-target': dropTarget && dropTarget.list === 'servicePhotos' && dropTarget.index === idx }"
+                     draggable="true"
+                     @dragstart="photoDragStart('servicePhotos', idx, $event)"
+                     @dragenter="photoDragEnter('servicePhotos', idx)"
+                     @dragover.prevent
+                     @drop.prevent="dropPhoto('servicePhotos', idx)"
+                     @dragend="photoDragEnd()">
+                  <img :src="'/media/' + photo.storage_path" :alt="'Photo ' + (idx + 1) + ' of ' + servicePhotos.length" loading="lazy" />
+                  <span class="photo-pos" x-text="idx + 1"></span>
+                  <span class="photo-cover" x-show="idx === 0">Cover</span>
+                  <div class="photo-overlay">
+                    <button type="button" class="photo-icon-btn" aria-label="Move photo earlier" @click="moveServicePhoto(idx, -1)" :disabled="idx === 0"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>
+                    <button type="button" class="photo-icon-btn" aria-label="Move photo later" @click="moveServicePhoto(idx, 1)" :disabled="idx === servicePhotos.length - 1"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg></button>
+                    <button type="button" class="photo-icon-btn danger" aria-label="Delete photo" @click="deleteServicePhoto(photo.id)"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
                   </div>
                 </div>
               </template>
             </div>
-            <p class="hint" x-show="servicePhotos.length === 0">No photos yet — add one above.</p>
+            <p class="hint" x-show="servicePhotos.length === 0">No photos yet — add one above. Drag to reorder once you have several.</p>
           </div>
 
           <div class="card">
@@ -712,20 +752,40 @@
           <!-- photo manager — only shown once a listing exists to attach photos to -->
           <div class="card" x-show="editingListingId">
             <h3>Photos</h3>
-            <input type="file" accept="image/jpeg,image/png,image/webp" @change="uploadListingPhoto($event, editingListingId)" class="mb-md" />
+            <div class="photo-dropzone mb-md" :class="{ dragover: photoDragOver }"
+                 @dragover.prevent="photoDragOver = true"
+                 @dragleave="photoDragOver = false"
+                 @drop.prevent="dropPhotoFiles($event, 'listing', editingListingId)">
+              <input type="file" id="listing-photo-input" accept="image/jpeg,image/png,image/webp" multiple @change="uploadListingPhoto($event, editingListingId)" class="visually-hidden" />
+              <label for="listing-photo-input">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12V4m0 0L5 7m3-3 3 3"/><path d="M2.5 12v1.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V12"/></svg>
+                <strong>Drop photos here or click to browse</strong>
+                <span>JPG, PNG or WebP, up to 2MB each — first photo is the cover</span>
+              </label>
+            </div>
+            <p class="photo-uploading" x-show="uploadingPhotos"><span class="spinner" aria-hidden="true"></span>Uploading…</p>
             <div class="photo-grid">
               <template x-for="(photo, idx) in listingPhotos" :key="photo.id">
-                <div class="photo-thumb">
-                  <img :src="'/media/' + photo.storage_path">
-                  <div class="photo-actions">
-                    <button type="button" class="row-actions" aria-label="Move photo earlier" @click="moveListingPhoto(idx, -1)" :disabled="idx === 0">&uarr;</button>
-                    <button type="button" class="row-actions" aria-label="Move photo later" @click="moveListingPhoto(idx, 1)" :disabled="idx === listingPhotos.length - 1">&darr;</button>
-                    <button type="button" class="row-actions danger" aria-label="Delete photo" @click="deleteListingPhoto(photo.id)">&times;</button>
+                <div class="photo-thumb"
+                     :class="{ dragging: dragPhoto && dragPhoto.list === 'listingPhotos' && dragPhoto.index === idx, 'drop-target': dropTarget && dropTarget.list === 'listingPhotos' && dropTarget.index === idx }"
+                     draggable="true"
+                     @dragstart="photoDragStart('listingPhotos', idx, $event)"
+                     @dragenter="photoDragEnter('listingPhotos', idx)"
+                     @dragover.prevent
+                     @drop.prevent="dropPhoto('listingPhotos', idx)"
+                     @dragend="photoDragEnd()">
+                  <img :src="'/media/' + photo.storage_path" :alt="'Photo ' + (idx + 1) + ' of ' + listingPhotos.length" loading="lazy" />
+                  <span class="photo-pos" x-text="idx + 1"></span>
+                  <span class="photo-cover" x-show="idx === 0">Cover</span>
+                  <div class="photo-overlay">
+                    <button type="button" class="photo-icon-btn" aria-label="Move photo earlier" @click="moveListingPhoto(idx, -1)" :disabled="idx === 0"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>
+                    <button type="button" class="photo-icon-btn" aria-label="Move photo later" @click="moveListingPhoto(idx, 1)" :disabled="idx === listingPhotos.length - 1"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg></button>
+                    <button type="button" class="photo-icon-btn danger" aria-label="Delete photo" @click="deleteListingPhoto(photo.id)"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
                   </div>
                 </div>
               </template>
             </div>
-            <p class="hint" x-show="listingPhotos.length === 0">No photos yet — add one above.</p>
+            <p class="hint" x-show="listingPhotos.length === 0">No photos yet — add one above. Drag to reorder once you have several.</p>
           </div>
 
           <div class="card">

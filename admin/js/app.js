@@ -9,6 +9,12 @@ function adminApp() {
     tab: "home",
     toast: null,
 
+    // photo manager UI state (shared across product/service/listing)
+    uploadingPhotos: false,
+    photoDragOver: false,
+    dragPhoto: null, // { list, index } while a thumb is being dragged
+    dropTarget: null, // { list, index } for the drop highlight
+
     // per-table loading flags — true until that table's first load
     // resolves, so tables render skeletons instead of a false "empty"
     loading: {
@@ -373,6 +379,95 @@ function adminApp() {
       }
     },
 
+    // ---- shared photo-manager helpers (product/service/listing) ----
+    reloadPhotoList(entityType, entityId) {
+      if (entityType === "product") return this.loadProductPhotos(entityId);
+      if (entityType === "service") return this.loadServicePhotos(entityId);
+      return this.loadListingPhotos(entityId);
+    },
+
+    async uploadPhotoFiles(fileList, entityType, entityId) {
+      const files = [...(fileList || [])].filter((f) => f.type.startsWith("image/"));
+      if (files.length === 0) {
+        this.showToast("No image files found.", "error");
+        return;
+      }
+      this.uploadingPhotos = true;
+      let ok = 0;
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("entityType", entityType);
+        formData.append("entityId", entityId);
+        try {
+          const res = await fetch("/api/media", { method: "POST", credentials: "same-origin", body: formData });
+          if (res.ok) {
+            ok += 1;
+          } else {
+            const data = await res.json().catch(() => ({}));
+            this.showToast(data.error || `Upload failed: ${file.name}`, "error");
+          }
+        } catch {
+          this.showToast(`Upload failed: ${file.name}`, "error");
+        }
+      }
+      this.uploadingPhotos = false;
+      if (ok > 0) {
+        this.showToast(ok === 1 ? "Photo uploaded." : `${ok} photos uploaded.`);
+        await this.reloadPhotoList(entityType, entityId);
+      }
+    },
+
+    dropPhotoFiles(event, entityType, entityId) {
+      this.photoDragOver = false;
+      this.uploadPhotoFiles(event.dataTransfer ? event.dataTransfer.files : [], entityType, entityId);
+    },
+
+    async savePhotoOrder(listName) {
+      const res = await fetch("/api/media/order", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ mediaIds: this[listName].map((p) => p.id) }),
+      });
+      if (!res.ok) this.showToast("Could not save photo order.", "error");
+    },
+
+    photoDragStart(listName, index, event) {
+      this.dragPhoto = { list: listName, index };
+      this.dropTarget = null;
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        try { event.dataTransfer.setData("text/plain", String(index)); } catch {}
+      }
+    },
+
+    photoDragEnter(listName, index) {
+      if (this.dragPhoto && this.dragPhoto.list === listName) {
+        this.dropTarget = { list: listName, index };
+      }
+    },
+
+    photoDragEnd() {
+      this.dragPhoto = null;
+      this.dropTarget = null;
+    },
+
+    async dropPhoto(listName, toIndex) {
+      const drag = this.dragPhoto;
+      this.dropTarget = null;
+      if (!drag || drag.list !== listName || drag.index === toIndex) {
+        this.dragPhoto = null;
+        return;
+      }
+      const photos = [...this[listName]];
+      const [moved] = photos.splice(drag.index, 1);
+      photos.splice(toIndex, 0, moved);
+      this[listName] = photos;
+      this.dragPhoto = null;
+      await this.savePhotoOrder(listName);
+    },
+
     resetProductForm() {
       this.productForm = { sku: "", name: "", category: "", priceMinor: "", sizes: "", stockQty: "", blurb: "" };
       this.editingProductId = null;
@@ -396,21 +491,9 @@ function adminApp() {
     },
 
     async uploadProductPhoto(event, productId) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("entityType", "product");
-      formData.append("entityId", productId);
-      const res = await fetch("/api/media", { method: "POST", credentials: "same-origin", body: formData });
-      const data = await res.json();
-      if (!res.ok) {
-        this.showToast(data.error || "Upload failed.", "error");
-        return;
-      }
-      this.showToast("Photo uploaded.");
+      const files = event.target.files;
       event.target.value = "";
-      await this.loadProductPhotos(productId);
+      await this.uploadPhotoFiles(files, "product", productId);
     },
 
     async deleteProductPhoto(mediaId) {
@@ -429,14 +512,7 @@ function adminApp() {
       const photos = [...this.productPhotos];
       [photos[index], photos[target]] = [photos[target], photos[index]];
       this.productPhotos = photos;
-
-      const res = await fetch("/api/media/order", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ mediaIds: photos.map((p) => p.id) }),
-      });
-      if (!res.ok) this.showToast("Could not save photo order.", "error");
+      await this.savePhotoOrder("productPhotos");
     },
 
     async submitProduct() {
@@ -825,21 +901,9 @@ function adminApp() {
     },
 
     async uploadServicePhoto(event, serviceId) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("entityType", "service");
-      formData.append("entityId", serviceId);
-      const res = await fetch("/api/media", { method: "POST", credentials: "same-origin", body: formData });
-      const data = await res.json();
-      if (!res.ok) {
-        this.showToast(data.error || "Upload failed.", "error");
-        return;
-      }
-      this.showToast("Photo uploaded.");
+      const files = event.target.files;
       event.target.value = "";
-      await this.loadServicePhotos(serviceId);
+      await this.uploadPhotoFiles(files, "service", serviceId);
     },
 
     async deleteServicePhoto(mediaId) {
@@ -858,14 +922,7 @@ function adminApp() {
       const photos = [...this.servicePhotos];
       [photos[index], photos[target]] = [photos[target], photos[index]];
       this.servicePhotos = photos;
-
-      const res = await fetch("/api/media/order", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ mediaIds: photos.map((p) => p.id) }),
-      });
-      if (!res.ok) this.showToast("Could not save photo order.", "error");
+      await this.savePhotoOrder("servicePhotos");
     },
 
     async submitService() {
@@ -1132,14 +1189,7 @@ function adminApp() {
       const photos = [...this.listingPhotos];
       [photos[index], photos[target]] = [photos[target], photos[index]];
       this.listingPhotos = photos;
-
-      const res = await fetch("/api/media/order", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ mediaIds: photos.map((p) => p.id) }),
-      });
-      if (!res.ok) this.showToast("Could not save photo order.", "error");
+      await this.savePhotoOrder("listingPhotos");
     },
 
     async submitListing() {
@@ -1185,21 +1235,9 @@ function adminApp() {
     },
 
     async uploadListingPhoto(event, listingId) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("entityType", "listing");
-      formData.append("entityId", listingId);
-      const res = await fetch("/api/media", { method: "POST", credentials: "same-origin", body: formData });
-      const data = await res.json();
-      if (!res.ok) {
-        this.showToast(data.error || "Upload failed.", "error");
-        return;
-      }
-      this.showToast("Photo uploaded.");
+      const files = event.target.files;
       event.target.value = "";
-      await this.loadListingPhotos(listingId);
+      await this.uploadPhotoFiles(files, "listing", listingId);
     },
 
     // ---- inquiries ----
