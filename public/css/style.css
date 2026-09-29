@@ -141,7 +141,8 @@ a{color:inherit}
   padding:.35rem .35rem .35rem 1.2rem;transition:border-color var(--fast) ease,box-shadow var(--fast) ease;
 }
 .claim-field:focus-within{border-color:var(--black);box-shadow:0 0 0 3px rgba(0,0,0,.08)}
-.claim-field input{flex:1;border:0;outline:0;font:inherit;background:transparent;min-width:0}
+.claim-field input{flex:1;border:0;outline:0;font:inherit;background:transparent;color:var(--black);min-width:0}
+.claim-field input::placeholder{color:var(--gray-500);opacity:1}
 .claim-suffix{color:var(--muted);font-size:.9rem;padding-right:1rem;white-space:nowrap}
 .hero-stats{display:flex;gap:clamp(1.5rem,1rem + 3vw,3rem);margin-top:1.5rem;flex-wrap:wrap}
 .hero-stats div{display:flex;flex-direction:column}
@@ -255,8 +256,9 @@ a{color:inherit}
 .field label{font-size:.85rem;font-weight:700}
 .field input{
   font:inherit;padding:.8rem 1rem;border:1.5px solid var(--border-strong);border-radius:var(--radius-sm);
-  background:var(--white);width:100%;transition:border-color var(--fast) ease,box-shadow var(--fast) ease;
+  background:var(--white);color:var(--black);width:100%;transition:border-color var(--fast) ease,box-shadow var(--fast) ease;
 }
+.field input::placeholder{color:var(--gray-500);opacity:1}
 .field input:focus{outline:0;border-color:var(--black);box-shadow:0 0 0 3px rgba(0,0,0,.08)}
 .inline-field{display:flex;align-items:center;gap:0;border:1.5px solid var(--border-strong);border-radius:var(--radius-sm);overflow:hidden;background:var(--white);transition:border-color var(--fast) ease,box-shadow var(--fast) ease}
 .inline-field:focus-within{border-color:var(--black);box-shadow:0 0 0 3px rgba(0,0,0,.08)}
