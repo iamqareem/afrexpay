@@ -392,9 +392,11 @@ html[data-theme="dark"] .claim-field:focus-within{border-color:var(--white);box-
 html[data-theme="dark"] .step-nav-item:not(.active):hover{border-color:var(--white);color:var(--white)}
 html[data-theme="dark"] .step-nav-item.active{background:var(--white);border-color:var(--white);color:var(--black)}
 html[data-theme="dark"] .step-nav-item.active .step-n{background:var(--black);color:var(--white);border-color:var(--black)}
-html[data-theme="dark"] .category-radio-card.active{border-color:var(--white)}
-html[data-theme="dark"] .category-radio-card.active .radio-dot{border-color:var(--white)}
-html[data-theme="dark"] .category-radio-card.active .radio-dot::after{background:var(--white)}
+html[data-theme="dark"] .category-radio-card{background:var(--surface)}
+html[data-theme="dark"] .category-radio-card:hover{border-color:var(--gray-500)}
+html[data-theme="dark"] .category-radio-card.active{background:var(--white);border-color:var(--white);color:var(--black)}
+html[data-theme="dark"] .category-radio-card.active .radio-body small{color:var(--gray-700)}
+/* Selected dot stays black (base rules) — clearly visible on the inverted white card */
 html[data-theme="dark"] .theme-wizard-card.selected{border-color:var(--white);background:var(--white);color:var(--black)}
 html[data-theme="dark"] .theme-wizard-card.selected .theme-wizard-badge{border-color:rgba(0,0,0,.3);color:var(--black)}
 html[data-theme="dark"] .theme-wizard-card.selected .theme-wizard-desc{color:var(--gray-700)}
