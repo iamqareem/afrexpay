@@ -187,16 +187,35 @@ function adminApp() {
     },
 
     async loadAll() {
+      // Config + vertical registry first: everything below branches on
+      // tabVisible(), which needs BOTH this.config.vertical and
+      // this.verticals. They used to load in the same Promise.all as the
+      // data (and loadThemes read config.vertical in a race with
+      // loadConfig), so a slow config fetch could send every branch the
+      // wrong way. Data loads only after the branch decision is stable.
+      await Promise.all([this.loadConfig(), this.loadVerticals()]);
       await Promise.all([
-        this.loadConfig(), this.loadVerticals(), this.loadProducts(),
-        this.loadOrders(), this.loadThemes(), this.loadStripeStatus(),
-        this.loadPaypalStatus(), this.loadDomainStatus(),
+        this.loadProducts(), this.loadOrders(), this.loadThemes(),
+        this.loadStripeStatus(), this.loadPaypalStatus(), this.loadDomainStatus(),
       ]);
       if (this.tabVisible("services")) {
         await Promise.all([this.loadServices(), this.loadResources(), this.loadWeeklyHours(), this.loadExceptions(), this.loadBookings()]);
+      } else {
+        // Flags start true (skeleton) and their loaders never run for
+        // this vertical — mark them done so homeLoading() and the tables
+        // don't wait forever on data that will never be fetched.
+        this.loading.services = false;
+        this.loading.bookings = false;
+        this.loading.hours = false;
+        this.loading.exceptions = false;
+        this.loading.resources = false;
       }
       if (this.tabVisible("listings")) {
         await Promise.all([this.loadListings(), this.loadInquiries(), this.loadReservations()]);
+      } else {
+        this.loading.listings = false;
+        this.loading.inquiries = false;
+        this.loading.reservations = false;
       }
     },
 
@@ -718,9 +737,22 @@ function adminApp() {
     },
 
     homeLoading() {
+      // Only waits on tables this vertical actually shows. The other
+      // verticals' loaders never run (see loadAll), so waiting on their
+      // flags too would pin the home skeleton on forever — exactly what
+      // happened on listings/services stores. While the vertical registry
+      // itself is still loading, tabVisible() is false for everything, so
+      // keep the skeleton up rather than flashing an empty dashboard.
+      if (!this.verticals || Object.keys(this.verticals).length === 0) return true;
       const l = this.loading;
-      return l.products || l.orders || l.services || l.bookings ||
-        l.listings || l.inquiries || l.reservations;
+      if (this.tabVisible("products") && l.products) return true;
+      if (this.tabVisible("orders") && l.orders) return true;
+      if (this.tabVisible("services") && l.services) return true;
+      if (this.tabVisible("bookings") && l.bookings) return true;
+      if (this.tabVisible("listings") && l.listings) return true;
+      if (this.tabVisible("inquiries") && l.inquiries) return true;
+      if (this.tabVisible("reservations") && l.reservations) return true;
+      return false;
     },
 
     // Paid orders created today, grouped by currency (merchants can sell
