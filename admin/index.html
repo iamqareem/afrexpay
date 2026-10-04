@@ -433,7 +433,7 @@
                 <option value="">All statuses</option>
                 <option value="pending">Pending</option>
                 <option value="confirmed">Confirmed</option>
-                <option value="completed">Completed</option>
+                <option value="fulfilled">Fulfilled</option>
                 <option value="cancelled">Cancelled</option>
               </select>
               <select x-model="filters.orders.pay" aria-label="Filter orders by payment">
@@ -637,7 +637,7 @@
                 </select>
               </div>
             </div>
-            <div class="field-grid" x-show="exceptionForm.isAvailable">
+            <div class="field-grid" x-show="exceptionIsOpen()">
               <div class="field"><label for="ex-start">Start</label><input id="ex-start" type="time" x-model="exceptionForm.startTime" /></div>
               <div class="field"><label for="ex-end">End</label><input id="ex-end" type="time" x-model="exceptionForm.endTime" /></div>
             </div>
@@ -881,7 +881,7 @@
                     <td data-label="Name" x-text="r.name"></td>
                     <td data-label="Phone" x-text="r.phone"></td>
                     <td data-label="Deposit" x-text="money(r.deposit_amount_minor, r.currency)"></td>
-                    <td data-label="Status"><span class="badge" :class="r.payment_status" x-text="r.payment_status"></span></td>
+                    <td data-label="Status"><span class="badge" :class="r.payment_status" x-text="r.payment_status || 'unpaid'"></span></td>
                   </tr>
                 </template>
               </tbody>
@@ -1032,7 +1032,7 @@
       </div>
     </div>
 
-    <div class="toast" :class="toast.kind" x-show="toast" x-text="toast && toast.message"></div>
+    <div class="toast" :class="toast ? toast.kind : ''" x-show="toast" x-text="toast && toast.message"></div>
   </div>
   <script>
     (function () {

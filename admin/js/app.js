@@ -144,6 +144,14 @@ function adminApp() {
     },
 
     setTab(name) {
+      // Vertical-specific tabs hide per store — never land on one that
+      // isn't visible (stale activity links, hand-typed hashes). The
+      // registry isn't loaded yet on first paint, so skip the check then;
+      // checkSession() re-enforces after loadAll().
+      const always = ["home", "config", "payments", "domain"];
+      if (!always.includes(name) && this.verticals && Object.keys(this.verticals).length > 0 && !this.tabVisible(name)) {
+        name = "home";
+      }
       this.tab = name;
       try { location.hash = "tab=" + name; } catch { /* non-browser env */ }
     },
@@ -151,7 +159,7 @@ function adminApp() {
     readTabFromHash() {
       const m = (location.hash || "").match(/tab=([a-z-]+)/);
       const known = ["home", "config", "payments", "domain", "products", "services", "availability", "orders", "bookings", "listings", "inquiries", "reservations"];
-      if (m && known.includes(m[1])) this.tab = m[1];
+      if (m && known.includes(m[1])) this.setTab(m[1]);
     },
 
     tabKey(e) {
@@ -201,18 +209,28 @@ function adminApp() {
       if (this.tabVisible("services")) {
         await Promise.all([this.loadServices(), this.loadResources(), this.loadWeeklyHours(), this.loadExceptions(), this.loadBookings()]);
       } else {
-        // Flags start true (skeleton) and their loaders never run for
-        // this vertical — mark them done so homeLoading() and the tables
-        // don't wait forever on data that will never be fetched.
+        this.markSkippedVerticalsDone();
+      }
+      if (this.tabVisible("listings")) {
+        await Promise.all([this.loadListings(), this.loadInquiries(), this.loadReservations()]);
+      } else {
+        this.markSkippedVerticalsDone();
+      }
+    },
+
+    // Flags start true (skeleton) and their loaders never run for hidden
+    // verticals — mark them done so tables and homeLoading() don't wait
+    // forever on data that will never be fetched. Shared by loadAll()
+    // and setVertical(), which both change what's visible.
+    markSkippedVerticalsDone() {
+      if (!this.tabVisible("services")) {
         this.loading.services = false;
         this.loading.bookings = false;
         this.loading.hours = false;
         this.loading.exceptions = false;
         this.loading.resources = false;
       }
-      if (this.tabVisible("listings")) {
-        await Promise.all([this.loadListings(), this.loadInquiries(), this.loadReservations()]);
-      } else {
+      if (!this.tabVisible("listings")) {
         this.loading.listings = false;
         this.loading.inquiries = false;
         this.loading.reservations = false;
@@ -287,6 +305,29 @@ function adminApp() {
       this.resources = [];
       this.resourceForm = { name: "", serviceId: "" };
       this.resourceError = "";
+      // Edit targets + photo grids + filters would otherwise flash the
+      // previous session's state on a shared machine (photo cards render
+      // on x-show="editing*Id").
+      this.resetProductForm();
+      this.resetServiceForm();
+      this.resetListingForm();
+      this.filters = {
+        products: { q: "", sort: "new" },
+        orders: { q: "", status: "", pay: "", sort: "new" },
+        services: { q: "", sort: "new" },
+        bookings: { q: "", status: "", sort: "new" },
+        listings: { q: "", sort: "new" },
+        inquiries: { q: "", sort: "new" },
+        reservations: { q: "", sort: "new" },
+      };
+      this.loginError = "";
+      this.showForgotPassword = false;
+      this.forgotEmail = "";
+      this.forgotMessage = "";
+      this.uploadingPhotos = false;
+      this.photoDragOver = false;
+      this.dragPhoto = null;
+      this.dropTarget = null;
       this.loading = {
         products: true, orders: true, services: true, hours: true,
         exceptions: true, bookings: true, listings: true,
@@ -346,6 +387,9 @@ function adminApp() {
         if (this.tabVisible("listings") && this.listings.length === 0) {
           await Promise.all([this.loadListings(), this.loadInquiries(), this.loadReservations()]);
         }
+        // The server auto-switches to a compatible theme when the vertical
+        // changed — re-read so the picker shows what's actually live.
+        await this.loadThemes();
         this.showToast("Store settings saved.");
       } catch (err) {
         this.showToast(err.message, "error");
@@ -498,7 +542,7 @@ function adminApp() {
       this.editingProductId = p.id;
       this.productForm = {
         sku: p.sku, name: p.name, category: p.category || "",
-        priceMinor: p.price_minor, sizes: p.sizes.join(", "),
+        priceMinor: p.price_minor, sizes: (p.sizes || []).join(", "),
         stockQty: p.stock_qty ?? "", blurb: p.blurb || "",
       };
       this.loadProductPhotos(p.id);
@@ -537,6 +581,11 @@ function adminApp() {
     async submitProduct() {
       this.productError = "";
       const sizes = this.productForm.sizes.split(",").map((s) => s.trim()).filter(Boolean);
+      // Number("") is 0 — a blank price must error, not mint a free product.
+      if (this.productForm.priceMinor === "" || this.productForm.priceMinor === null) {
+        this.productError = "A whole-number price is required.";
+        return;
+      }
       const priceMinor = Number(this.productForm.priceMinor);
 
       if (!this.productForm.sku || !this.productForm.name || !Number.isInteger(priceMinor) || sizes.length === 0) {
@@ -550,7 +599,7 @@ function adminApp() {
         category: this.productForm.category || null,
         priceMinor,
         sizes,
-        stockQty: this.productForm.stockQty === "" ? null : Number(this.productForm.stockQty),
+        stockQty: this.productForm.stockQty === "" ? null : (Number.isInteger(Number(this.productForm.stockQty)) ? Number(this.productForm.stockQty) : null),
         blurb: this.productForm.blurb || null,
       };
 
@@ -624,6 +673,10 @@ function adminApp() {
     // Whole minor units printed raw (e.g. "UGX 5,000") are only correct
     // for zero-decimal currencies; decimal ones need cents ("$50.00").
     money(minor, currency) {
+      // No amount at all (blank deposit, untracked price) renders as an
+      // em dash — Number(null) || 0 used to print "UGX 0", hiding "none"
+      // behind a real-looking zero. Genuine 0 still prints as zero.
+      if (minor === null || minor === undefined || minor === "") return "—";
       const code = (currency || "UGX").toUpperCase();
       const n = Number(minor) || 0;
       const zeroDecimal = new Set([
@@ -876,7 +929,22 @@ function adminApp() {
       await this.loadThemes();
       const compatible = this.filteredThemes();
       if (!compatible.some((t) => t.id === this.currentTheme) && compatible.length > 0) {
-        await this.setTheme(compatible[0].id);
+        // Preview locally only — persisting happens on Save, together with
+        // the vertical itself, so theme and vertical can never diverge
+        // from a failed or skipped save.
+        this.currentTheme = compatible[0].id;
+      }
+      // Newly-visible tabs need their data now, not after a refresh; tabs
+      // that just hid must not strand the user on an empty section.
+      if (this.tabVisible("services")) {
+        await Promise.all([this.loadServices(), this.loadResources(), this.loadWeeklyHours(), this.loadExceptions(), this.loadBookings()]);
+      }
+      if (this.tabVisible("listings")) {
+        await Promise.all([this.loadListings(), this.loadInquiries(), this.loadReservations()]);
+      }
+      this.markSkippedVerticalsDone();
+      if (!["home", "config", "payments", "domain"].includes(this.tab) && !this.tabVisible(this.tab)) {
+        this.setTab("home");
       }
     },
 
@@ -959,6 +1027,10 @@ function adminApp() {
 
     async submitService() {
       this.serviceError = "";
+      if (this.serviceForm.priceMinor === "" || this.serviceForm.priceMinor === null) {
+        this.serviceError = "A whole-number price is required.";
+        return;
+      }
       const durationMinutes = Number(this.serviceForm.durationMinutes);
       const priceMinor = Number(this.serviceForm.priceMinor);
       if (!this.serviceForm.name || !Number.isInteger(durationMinutes) || durationMinutes <= 0 || !Number.isInteger(priceMinor)) {
@@ -1094,11 +1166,20 @@ function adminApp() {
       }
     },
 
+    // Select controls serialize to strings, so after touching the
+    // availability dropdown isAvailable is "true"/"false" — and "false" is
+    // truthy. Centralize the coercion instead of trusting the raw value.
+    exceptionIsOpen() {
+      const v = this.exceptionForm.isAvailable;
+      return v === true || v === "true";
+    },
+
     async addException() {
       if (!this.exceptionForm.date) {
         this.showToast("Pick a date first.", "error");
         return;
       }
+      this.exceptionForm.isAvailable = this.exceptionIsOpen();
       const res = await fetch("/api/availability/exceptions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1226,6 +1307,10 @@ function adminApp() {
 
     async submitListing() {
       this.listingError = "";
+      if (this.listingForm.priceMinor === "" || this.listingForm.priceMinor === null) {
+        this.listingError = "A whole-number price is required.";
+        return;
+      }
       const priceMinor = Number(this.listingForm.priceMinor);
       if (!this.listingForm.title || !Number.isInteger(priceMinor)) {
         this.listingError = "Title and a whole-number price are required.";
