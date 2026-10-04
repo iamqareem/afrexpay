@@ -1,4 +1,4 @@
-import { money } from '../helpers.js';
+import { money, esc } from '../helpers.js';
 
 export default class ListingGrid {
   constructor(container, listings, config, onSelect) {
@@ -24,13 +24,13 @@ export default class ListingGrid {
           ${this.listings.map(l => `
             <div class="listing-card" data-id="${l.id}">
               <div class="w-full aspect-video bg-surface2">
-                ${l.thumbnail_path ? `<img src="/media/${l.thumbnail_path}" alt="${l.title}" loading="lazy" onerror="this.style.display='none'" class="w-full h-full object-cover" />` : ''}
+                ${l.thumbnail_path ? `<img src="/media/${l.thumbnail_path}" alt="${esc(l.title)}" loading="lazy" onerror="this.style.display='none'" class="w-full h-full object-cover" />` : ''}
               </div>
               <div class="p-4">
                 <span class="listing-badge">${l.listing_type === 'rent' ? 'FOR RENT' : 'FOR SALE'}</span>
-                <h3 class="font-semibold mt-2">${l.title}</h3>
+                <h3 class="font-semibold mt-2">${esc(l.title)}</h3>
                 <p class="text-accent font-semibold mt-1">${money(l.price_minor, currency)}</p>
-                <p class="text-muted text-sm mt-1">${[l.bedrooms ? l.bedrooms + ' bd' : null, l.bathrooms ? l.bathrooms + ' ba' : null, l.location].filter(Boolean).join(' · ')}</p>
+                <p class="text-muted text-sm mt-1">${[l.bedrooms ? l.bedrooms + ' bd' : null, l.bathrooms ? l.bathrooms + ' ba' : null, esc(l.location)].filter(Boolean).join(' · ')}</p>
               </div>
             </div>
           `).join('')}
@@ -44,10 +44,10 @@ export default class ListingGrid {
       <div class="mb-10 grid gap-6 md:grid-cols-2 md:items-center">
         <div>
           <h1 class="font-display text-4xl md:text-5xl mb-2">
-            <span>${heroLine1}</span>
-            <span class="text-accent">${heroLine2}</span>
+            <span>${esc(heroLine1)}</span>
+            <span class="text-accent">${esc(heroLine2)}</span>
           </h1>
-          <p class="text-muted mb-4">${heroSubtitle}</p>
+          <p class="text-muted mb-4">${esc(heroSubtitle)}</p>
           <p class="text-sm font-semibold" role="status">${liveCount ? `${liveCount} home${liveCount === 1 ? "" : "s"} live now` : "New homes landing soon"}</p>
         </div>
         <div aria-hidden="true">

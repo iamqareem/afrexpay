@@ -74,7 +74,7 @@ function invalidateTenantCache(slug) {
 
 async function fetchTenant(slug) {
   const { rows } = await pool.query(
-    `SELECT t.id, t.subdomain, t.business_name, t.status,
+    `SELECT t.id, t.subdomain, t.business_name, t.status, t.custom_domain,
             sc.config, sc.theme_slug
      FROM tenants t
      LEFT JOIN store_configs sc ON sc.tenant_id = t.id

@@ -14,6 +14,14 @@ function money(minor, currency) {
   return `${code} ${(Number(minor) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// Merchant-controlled strings must never hit innerHTML raw.
+const esc = (s) =>
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
 function applyConfig(config) {
   state.config = config;
   const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text ?? ""; };
@@ -54,11 +62,11 @@ async function renderServices() {
       return `
     <div class="service-card" data-service="${s.id}">
       <div class="relative">
-        ${cover ? `<img src="/media/${cover}" alt="${s.name}" loading="lazy" onerror="this.style.display='none'" class="w-full aspect-video object-cover rounded-md mb-3" />` : ""}
+        ${cover ? `<img src="/media/${cover}" alt="${esc(s.name)}" loading="lazy" onerror="this.style.display='none'" class="w-full aspect-video object-cover rounded-md mb-3" />` : ""}
         ${photos.length > 1 ? `<span style="position:absolute;bottom:1rem;right:0.75rem;background:rgba(0,0,0,0.65);color:#fff;font-size:0.7rem;font-weight:700;padding:0.15rem 0.5rem;border-radius:999px;">+${photos.length - 1}</span>` : ""}
       </div>
-      <h3 class="font-semibold">${s.name}</h3>
-      ${s.description ? `<p class="text-muted text-sm mt-1">${s.description}</p>` : ""}
+      <h3 class="font-semibold">${esc(s.name)}</h3>
+      ${s.description ? `<p class="text-muted text-sm mt-1">${esc(s.description)}</p>` : ""}
       <p class="text-sm mt-2">${s.duration_minutes} min &middot; ${money(s.price_minor, s.currency)}</p>
     </div>`;
     })
@@ -92,7 +100,6 @@ function renderStaffPicker(resources) {
     return;
   }
   row.classList.remove("hidden");
-  const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   list.innerHTML =
     `<button class="slot-btn${!state.selectedResource ? " selected" : ""}" data-staff="">Anyone</button>` +
     resources
@@ -161,7 +168,7 @@ async function handleBookingSubmit(e) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Could not book that slot.");
 
-    showConfirm(data.id, false);
+    showConfirm(data.id);
   } catch (err) {
     // A 409 here means someone else booked this exact slot between the
     // picker loading and this submit — refresh the slot list so the
@@ -172,15 +179,23 @@ async function handleBookingSubmit(e) {
   }
 }
 
-// Shows the booking confirmation. `paid` only ever comes from our own
-// successUrl redirect — purely a UX banner, the booking's real
-// payment_status is set server-side by the Stripe webhook.
-function showConfirm(bookingId, paid) {
+// Shows the booking confirmation. Paid or not is decided by asking the
+// server for the booking's real payment_status — the ?paid=1 query param
+// is never trusted (anyone can forge a query string; only the webhook
+// flips payment_status).
+async function showConfirm(bookingId) {
   state.lastBookingId = bookingId;
   document.getElementById("step-service").classList.add("hidden");
   document.getElementById("step-slots").classList.add("hidden");
   document.getElementById("step-details").classList.add("hidden");
   document.getElementById("step-confirm").classList.remove("hidden");
+  let paid = false;
+  try {
+    const res = await fetch(`/api/bookings/${bookingId}/status`);
+    if (res.ok) paid = (await res.json()).payment_status === "paid";
+  } catch {
+    paid = false;
+  }
   document.getElementById("confirm-paid").classList.toggle("hidden", !paid);
   const slot = document.getElementById("pay-now-slot");
   slot.classList.toggle("hidden", !!paid);
@@ -188,9 +203,14 @@ function showConfirm(bookingId, paid) {
   if (!paid && window.AfrexpayCheckout) {
     window.AfrexpayCheckout.render(slot, { entityType: "booking", entityId: bookingId });
   }
-  if (!paid && state.selectedService && state.selectedSlot) {
-    document.getElementById("confirm-detail").textContent =
+  const detailEl = document.getElementById("confirm-detail");
+  if (paid) {
+    detailEl.textContent = "Your booking is confirmed and paid. We'll be in touch.";
+  } else if (state.selectedService && state.selectedSlot) {
+    detailEl.textContent =
       `${state.selectedService.name} on ${new Date(state.selectedSlot).toLocaleString()}. We'll be in touch to confirm.`;
+  } else {
+    detailEl.textContent = "Your booking is held. You can complete payment with the button below.";
   }
 }
 
@@ -208,15 +228,11 @@ async function init() {
 
   // If Stripe redirected back here (successUrl/cancelUrl both point at
   // this same page with a `booking` param), jump straight to the
-  // confirmation — with the paid banner when `paid=1` is present.
+  // confirmation — paid or not is decided server-side inside showConfirm.
   const params = new URLSearchParams(window.location.search);
   const returnBookingId = params.get("booking");
   if (returnBookingId) {
-    document.getElementById("confirm-detail").textContent =
-      params.get("paid") === "1"
-        ? "Your booking is confirmed and paid. We'll be in touch."
-        : "Your booking is held. You can complete payment with the button below.";
-    showConfirm(returnBookingId, params.get("paid") === "1");
+    showConfirm(returnBookingId);
   }
 }
 

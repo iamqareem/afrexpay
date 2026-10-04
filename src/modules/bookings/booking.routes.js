@@ -2,9 +2,10 @@
 const express = require("express");
 const authRequired = require("../../middleware/auth-required");
 const { publicWriteLimiter } = require("../../middleware/rate-limits");
-const { createBooking, listBookings, updateBookingStatus, startBookingCheckout, BOOKING_STATUSES } = require("./booking.service");
+const { createBooking, listBookings, getBookingPaymentStatus, updateBookingStatus, startBookingCheckout, BOOKING_STATUSES } = require("./booking.service");
 const { getConfig } = require("../store-config/config.service");
 const { notifyNewOrder } = require("../notify-matrix/matrix.service");
+const { assertSafeCheckoutRedirects } = require("../../lib/checkout-redirects");
 
 const router = express.Router();
 
@@ -37,10 +38,23 @@ router.post("/", publicWriteLimiter, async (req, res) => {
   }
 });
 
+// Public — server-side truth for the buyer's confirmation screen
+// (see order.routes.js). Tenant-scoped, ids unguessable.
+router.get("/:id/status", async (req, res) => {
+  const row = await getBookingPaymentStatus(req.tenant.id, req.params.id);
+  if (!row) return res.status(404).json({ error: "Booking not found." });
+  res.json({ id: row.id, status: row.status, payment_status: row.payment_status });
+});
+
 router.post("/:id/checkout", publicWriteLimiter, async (req, res) => {
   const { successUrl, cancelUrl } = req.body || {};
   if (!successUrl || !cancelUrl) {
     return res.status(400).json({ error: "successUrl and cancelUrl are required." });
+  }
+  try {
+    assertSafeCheckoutRedirects(successUrl, cancelUrl, req.tenant);
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
   }
 
   try {
@@ -64,9 +78,16 @@ router.patch("/:id", authRequired, async (req, res) => {
   if (!BOOKING_STATUSES.includes(status)) {
     return res.status(400).json({ error: `status must be one of: ${BOOKING_STATUSES.join(", ")}.` });
   }
-  const updated = await updateBookingStatus(req.tenant.id, req.params.id, status);
-  if (!updated) return res.status(404).json({ error: "Booking not found." });
-  res.json(updated);
+  try {
+    const updated = await updateBookingStatus(req.tenant.id, req.params.id, status);
+    if (!updated) return res.status(404).json({ error: "Booking not found." });
+    res.json(updated);
+  } catch (err) {
+    // Illegal transitions (e.g. resurrecting a cancelled booking) land
+    // here with err.status = 400 and a human message — surface it, don't
+    // generic-500 it via the central handler.
+    res.status(err.status || 500).json({ error: err.status ? err.message : "Could not update booking." });
+  }
 });
 
 module.exports = router;

@@ -99,6 +99,8 @@ async function createOrder(tenantId, { customerName, phone, address, deliveryNot
 
 const { getProvider } = require("../payments/providers");
 const { getDecryptedCredentials } = require("../payments/credentials.service");
+const { recordCheckoutSession } = require("../payments/checkout-sessions.service");
+const { flagCancelledPayment } = require("../../lib/flag-cancelled-payment");
 const { buildStripeLineItems } = require("../payments/stripe-checkout-helpers");
 const { savePayPalOrderContext } = require("../payments/paypal-context.service");
 
@@ -118,6 +120,11 @@ async function startOrderCheckout(tenantId, orderId, { successUrl, cancelUrl, pr
   }
   if (order.payment_status === "paid") {
     throw Object.assign(new Error("Order is already paid."), { status: 400 });
+  }
+  // Same rule as bookings: a cancelled order's stock/f fulfillment is gone —
+  // refuse before any provider session exists.
+  if (order.status === "cancelled") {
+    throw Object.assign(new Error("This order is no longer available for payment."), { status: 400 });
   }
 
   const itemsResult = await pool.query(
@@ -154,6 +161,10 @@ async function startOrderCheckout(tenantId, orderId, { successUrl, cancelUrl, pr
     `UPDATE orders SET ${sessionIdField} = $2, payment_status = 'pending' WHERE tenant_id = $3 AND id = $1`,
     [order.id, sessionId, tenantId]
   );
+  // History, not just the current column: a later re-checkout overwrites
+  // sessionIdField above, but the earlier provider session stays payable —
+  // its webhook must still resolve (see markOrderPaid).
+  await recordCheckoutSession(provider, sessionId, tenantId, "order", order.id);
   return { checkoutUrl };
 }
 
@@ -165,13 +176,18 @@ async function markOrderPaid(tenantId, sessionId, amountMinor, currency, provide
     const sessionIdField = provider === "paypal" ? "paypal_checkout_session_id" : "stripe_checkout_session_id";
     const { rows } = await client.query(
       `UPDATE orders SET payment_status = 'paid', status = 'confirmed'
-       WHERE tenant_id = $1 AND ${sessionIdField} = $2 AND payment_status = 'pending'
+       WHERE tenant_id = $1 AND payment_status IN ('pending', 'failed') AND status != 'cancelled'
+         AND (${sessionIdField} = $2 OR id IN (
+           SELECT entity_id FROM checkout_sessions
+           WHERE provider = $3 AND session_id = $2 AND tenant_id = $1 AND entity_type = 'order'
+         ))
        RETURNING *`,
-      [tenantId, sessionId]
+      [tenantId, sessionId, provider]
     );
     const order = rows[0];
     if (!order) {
       await client.query("ROLLBACK");
+      await flagCancelledPayment({ tenantId, sessionId, provider, table: "orders", sessionIdField });
       return null;
     }
 
@@ -179,14 +195,14 @@ async function markOrderPaid(tenantId, sessionId, amountMinor, currency, provide
     // confirm the order. Stripe amounts are authoritative; PayPal amounts
     // come from the capture resource and could be spoofed if verification
     // were bypassed. Fail closed but leave an audit trail.
-    if (!amountMinor || amountMinor < order.total_minor) {
+    if (!amountMinor || amountMinor !== order.total_minor) {
       await client.query("ROLLBACK");
       console.error(`Order ${order.id} underpaid: expected ${order.total_minor} ${order.currency}, got ${amountMinor} ${currency}`);
       try {
         await pool.query(
           `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
            VALUES ($1, 'order', $2, $3, $4, $5, $6, 'failed')`,
-          [tenantId, order.id, provider, providerRef || sessionId, amountMinor || 0, currency || order.currency]
+          [tenantId, order.id, provider, `${providerRef || sessionId}:failed:${Date.now()}`, amountMinor || 0, currency || order.currency]
         );
       } catch {}
       return null;
@@ -198,7 +214,7 @@ async function markOrderPaid(tenantId, sessionId, amountMinor, currency, provide
         await pool.query(
           `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
            VALUES ($1, 'order', $2, $3, $4, $5, $6, 'failed')`,
-          [tenantId, order.id, provider, providerRef || sessionId, amountMinor || 0, currency || order.currency]
+          [tenantId, order.id, provider, `${providerRef || sessionId}:failed:${Date.now()}`, amountMinor || 0, currency || order.currency]
         );
       } catch {}
       return null;
@@ -220,6 +236,18 @@ async function markOrderPaid(tenantId, sessionId, amountMinor, currency, provide
   } finally {
     client.release();
   }
+}
+
+// Public return-page helper: lets the buyer's own confirmation screen
+// verify payment against the server instead of trusting the ?paid=1 query
+// param (anyone can forge a query string; only the webhook flips
+// payment_status). Ids are unguessable UUIDs, tenant-scoped.
+async function getOrderPaymentStatus(tenantId, orderId) {
+  const { rows } = await pool.query(
+    `SELECT id, status, payment_status FROM orders WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, orderId]
+  );
+  return rows[0] || null;
 }
 
 async function listOrders(tenantId, params = {}) {
@@ -284,4 +312,4 @@ async function releaseAbandonedOrders(db = pool, { olderThanMinutes = 1440 } = {
   return rows[0];
 }
 
-module.exports = { createOrder, listOrders, startOrderCheckout, markOrderPaid, updateOrderStatus, releaseAbandonedOrders, ORDER_STATUSES };
+module.exports = { createOrder, listOrders, getOrderPaymentStatus, startOrderCheckout, markOrderPaid, updateOrderStatus, releaseAbandonedOrders, ORDER_STATUSES };

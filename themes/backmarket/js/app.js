@@ -20,6 +20,14 @@ const money = (n) => {
   return `${code} ${(Number(n) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
+// Merchant-controlled strings must never hit innerHTML raw.
+const esc = (s) =>
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
 function applyConfig(config) {
   state.config = config;
   const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text ?? ""; };
@@ -77,7 +85,7 @@ async function renderProducts() {
     return `
     <div class="product-card">
     <div class="relative overflow-hidden bg-[#F7F7F8]">
-    ${img ? `<img src="${img}" alt="${p.name}" loading="lazy" onerror="this.style.display='none'" class="w-full aspect-square object-cover transition-transform duration-300 hover:scale-105" />` : `<div class="w-full aspect-square bg-[#F7F7F8] flex items-center justify-center text-[#6B6B6B] text-sm">No image</div>`}
+    ${img ? `<img src="${img}" alt="${esc(p.name)}" loading="lazy" onerror="this.style.display='none'" class="w-full aspect-square object-cover transition-transform duration-300 hover:scale-105" />` : `<div class="w-full aspect-square bg-[#F7F7F8] flex items-center justify-center text-[#6B6B6B] text-sm">No image</div>`}
     <div class="absolute top-3 left-3">
     <span class="condition-badge condition-${condition}">${conditionLabel}</span>
     </div>
@@ -86,15 +94,15 @@ async function renderProducts() {
     </div>
     </div>
     <div class="p-4">
-    ${p.category ? `<p class="text-xs text-[#6B6B6B] uppercase tracking-wide">${p.category}</p>` : ''}
-    <h3 class="font-display font-medium text-[#1A1A1A] mt-1">${p.name}</h3>
-    ${p.blurb ? `<p class="text-sm text-[#6B6B6B] mt-1">${p.blurb}</p>` : ''}
+    ${p.category ? `<p class="text-xs text-[#6B6B6B] uppercase tracking-wide">${esc(p.category)}</p>` : ''}
+    <h3 class="font-display font-medium text-[#1A1A1A] mt-1">${esc(p.name)}</h3>
+    ${p.blurb ? `<p class="text-sm text-[#6B6B6B] mt-1">${esc(p.blurb)}</p>` : ''}
     <div class="mt-3 flex items-baseline gap-2">
     <span class="price-current">${money(price)}</span>
     <span class="price-original">${money(originalPrice)}</span>
     </div>
     <select data-size-for="${p.id}" class="w-full bg-[#F7F7F8] border border-[#EDEDF0] rounded-lg px-3 py-2 text-sm text-[#1A1A1A] mt-3 focus:outline-none focus:border-[#00AB84]">
-    ${p.sizes.map((s) => `<option value="${s}">${s}</option>`).join("")}
+    ${p.sizes.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}
     </select>
     <button data-add="${p.id}" class="w-full bg-[#00AB84] text-white font-bold text-sm py-2.5 rounded-lg mt-3 hover:bg-[#007A5E] transition-colors">
     ADD TO CART
@@ -163,8 +171,8 @@ function renderCart() {
     (item, index) => `
     <div class="flex items-start justify-between gap-3 pb-3 border-b border-[#EDEDF0]">
     <div class="flex-1">
-    <p class="text-[#1A1A1A] font-medium">${item.name}</p>
-    <p class="text-[#6B6B6B] text-xs">SIZE ${item.size}</p>
+    <p class="text-[#1A1A1A] font-medium">${esc(item.name)}</p>
+    <p class="text-[#6B6B6B] text-xs">SIZE ${esc(item.size)}</p>
     <div class="flex items-center gap-2 mt-2">
     <button data-qty-down="${index}" class="w-6 h-6 border border-[#EDEDF0] hover:border-[#00AB84] text-[#1A1A1A] flex items-center justify-center rounded">-</button>
     <span class="text-[#1A1A1A]">${item.qty}</span>
@@ -204,11 +212,21 @@ function closeCheckout() {
   document.getElementById("checkout-overlay").classList.add("hidden");
   document.getElementById("checkout-overlay").classList.remove("flex");
 }
-function openConfirm(orderId, paid) {
+async function openConfirm(orderId) {
   state.lastOrderId = orderId;
   document.getElementById("confirm-id").textContent = orderId.slice(0, 8);
-  // Purely a UX confirmation — the order's real payment_status is set
-  // server-side by the Stripe webhook, never by this client-side redirect.
+  // Never trust the ?paid=1 query param (anyone can forge a query string)
+  // — ask the server for the order's real payment_status. Unreachable or
+  // unpaid both render the pay-now path, never the paid banner.
+  let paid = false;
+  try {
+    const res = await fetch(`/api/orders/${orderId}/status`);
+    if (res.ok) paid = (await res.json()).payment_status === "paid";
+  } catch {
+    paid = false;
+  }
+  // The paid banner reflects the webhook-set payment_status above, never
+  // the client-side redirect that brought the buyer here.
   document.getElementById("confirm-paid").classList.toggle("hidden", !paid);
   const slot = document.getElementById("pay-now-slot");
   slot.classList.toggle("hidden", !!paid);
@@ -256,7 +274,7 @@ async function handleCheckoutSubmit(e) {
     form.reset();
     closeCheckout();
     closeCart();
-    openConfirm(data.id, false);
+    openConfirm(data.id);
   } catch (err) {
     errorEl.textContent = err.message;
     errorEl.classList.remove("hidden");
@@ -286,11 +304,11 @@ async function init() {
 
   // If Stripe redirected back here (successUrl/cancelUrl both point at
   // this same page with an `order` param), reopen the confirm overlay —
-  // with the paid banner when `paid=1` is present.
+  // paid or not is decided server-side inside openConfirm.
   const params = new URLSearchParams(window.location.search);
   const returnOrderId = params.get("order");
   if (returnOrderId) {
-    openConfirm(returnOrderId, params.get("paid") === "1");
+    openConfirm(returnOrderId);
   }
 }
 

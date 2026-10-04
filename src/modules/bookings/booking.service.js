@@ -11,6 +11,17 @@ const EXCLUSION_VIOLATION = "23P01";
 // Mirrors the booking_status ENUM in migrations/1751500000000_initial-schema.js.
 const BOOKING_STATUSES = ["pending", "confirmed", "cancelled", "completed"];
 
+// Forward-only lifecycle: cancelled/completed are terminal and can never
+// be left (see updateBookingStatus). Kept next to BOOKING_STATUSES so a
+// future status addition fails visibly here instead of silently opening
+// a resurrection path.
+const BOOKING_TRANSITIONS = {
+  pending: new Set(["confirmed", "cancelled"]),
+  confirmed: new Set(["completed", "cancelled"]),
+  cancelled: new Set(),
+  completed: new Set(),
+};
+
 // Pure slot-window check (no DB) — unit-tested in tests/booking-windows.test.js.
 // Minutes are offsets from UTC midnight of the booking date; windows are
 // { start: "HH:MM", end: "HH:MM" } in the same frame.
@@ -156,6 +167,16 @@ async function createBooking(tenantId, { serviceId, customerName, phone, notes, 
   }
 }
 
+// Public return-page helper (see getOrderPaymentStatus): server-side truth
+// for the buyer's confirmation screen instead of the forgeable ?paid=1.
+async function getBookingPaymentStatus(tenantId, bookingId) {
+  const { rows } = await pool.query(
+    `SELECT id, status, payment_status FROM bookings WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, bookingId]
+  );
+  return rows[0] || null;
+}
+
 async function listBookings(tenantId, params = {}) {
   const { search, status, limit, offset, dir } = parseListParams(params);
   const conditions = [`b.tenant_id = $1`];
@@ -178,6 +199,23 @@ async function listBookings(tenantId, params = {}) {
 }
 
 async function updateBookingStatus(tenantId, bookingId, status) {
+  // Terminal states stay terminal: resurrecting a cancelled/completed
+  // booking would re-activate its time_range without revalidating working
+  // hours or the exclusion constraint (slot may be rebooked) — confirm/
+  // complete/cancel only move forward from a live state.
+  const currentResult = await pool.query(
+    `SELECT status FROM bookings WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, bookingId]
+  );
+  const current = currentResult.rows[0]?.status;
+  if (!current) return null;
+  const allowed = BOOKING_TRANSITIONS[current] || new Set();
+  if (!allowed.has(status)) {
+    throw Object.assign(
+      new Error(`Cannot move booking from '${current}' to '${status}'.`),
+      { status: 400 }
+    );
+  }
   const { rows } = await pool.query(
     `UPDATE bookings SET status = $3 WHERE tenant_id = $1 AND id = $2 RETURNING *`,
     [tenantId, bookingId, status]
@@ -187,6 +225,8 @@ async function updateBookingStatus(tenantId, bookingId, status) {
 
 const { getProvider } = require("../payments/providers");
 const { getDecryptedCredentials } = require("../payments/credentials.service");
+const { recordCheckoutSession } = require("../payments/checkout-sessions.service");
+const { flagCancelledPayment } = require("../../lib/flag-cancelled-payment");
 const { buildStripeLineItems } = require("../payments/stripe-checkout-helpers");
 const { savePayPalOrderContext } = require("../payments/paypal-context.service");
 
@@ -208,6 +248,12 @@ async function startBookingCheckout(tenantId, bookingId, { successUrl, cancelUrl
   }
   if (booking.payment_status === "paid") {
     throw Object.assign(new Error("Booking is already paid."), { status: 400 });
+  }
+  // A cancelled/completed booking's slot is gone (freed or served) — a
+  // fresh checkout against it could never be fulfilled, and its webhook
+  // would be refused below. Fail here, before any provider session exists.
+  if (booking.status === "cancelled" || booking.status === "completed") {
+    throw Object.assign(new Error("This booking is no longer available for payment."), { status: 400 });
   }
 
   const lineItems = buildStripeLineItems(
@@ -243,6 +289,8 @@ async function startBookingCheckout(tenantId, bookingId, { successUrl, cancelUrl
     `UPDATE bookings SET ${sessionIdField} = $2, payment_status = 'pending' WHERE tenant_id = $3 AND id = $1`,
     [booking.id, sessionId, tenantId]
   );
+  // History, not just the current column (see startOrderCheckout).
+  await recordCheckoutSession(provider, sessionId, tenantId, "booking", booking.id);
   return { checkoutUrl };
 }
 
@@ -254,24 +302,29 @@ async function markBookingPaid(tenantId, sessionId, amountMinor, currency, provi
     const sessionIdField = provider === "paypal" ? "paypal_checkout_session_id" : "stripe_checkout_session_id";
     const { rows } = await client.query(
       `UPDATE bookings SET payment_status = 'paid', status = 'confirmed'
-       WHERE tenant_id = $1 AND ${sessionIdField} = $2 AND payment_status = 'pending'
+       WHERE tenant_id = $1 AND payment_status IN ('pending', 'failed') AND status != 'cancelled'
+         AND (${sessionIdField} = $2 OR id IN (
+           SELECT entity_id FROM checkout_sessions
+           WHERE provider = $3 AND session_id = $2 AND tenant_id = $1 AND entity_type = 'booking'
+         ))
        RETURNING *`,
-      [tenantId, sessionId]
+      [tenantId, sessionId, provider]
     );
     const booking = rows[0];
     if (!booking) {
       await client.query("ROLLBACK");
+      await flagCancelledPayment({ tenantId, sessionId, provider, table: "bookings", sessionIdField });
       return null;
     }
 
-    if (!amountMinor || amountMinor < booking.price_minor) {
+    if (!amountMinor || amountMinor !== booking.price_minor) {
       await client.query("ROLLBACK");
       console.error(`Booking ${booking.id} underpaid: expected ${booking.price_minor} ${booking.currency}, got ${amountMinor} ${currency}`);
       try {
         await pool.query(
           `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
            VALUES ($1, 'booking', $2, $3, $4, $5, $6, 'failed')`,
-          [tenantId, booking.id, provider, providerRef || sessionId, amountMinor || 0, currency || booking.currency]
+          [tenantId, booking.id, provider, `${providerRef || sessionId}:failed:${Date.now()}`, amountMinor || 0, currency || booking.currency]
         );
       } catch {}
       return null;
@@ -283,7 +336,7 @@ async function markBookingPaid(tenantId, sessionId, amountMinor, currency, provi
         await pool.query(
           `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
            VALUES ($1, 'booking', $2, $3, $4, $5, $6, 'failed')`,
-          [tenantId, booking.id, provider, providerRef || sessionId, amountMinor || 0, currency || booking.currency]
+          [tenantId, booking.id, provider, `${providerRef || sessionId}:failed:${Date.now()}`, amountMinor || 0, currency || booking.currency]
         );
       } catch {}
       return null;
@@ -328,4 +381,4 @@ async function releaseAbandonedBookings(db = pool, { olderThanMinutes = 1440 } =
   return { cancelled: rows.length };
 }
 
-module.exports = { createBooking, listBookings, updateBookingStatus, startBookingCheckout, markBookingPaid, checkSlotInWindows, releaseAbandonedBookings, BOOKING_STATUSES };
+module.exports = { createBooking, listBookings, getBookingPaymentStatus, updateBookingStatus, startBookingCheckout, markBookingPaid, checkSlotInWindows, releaseAbandonedBookings, BOOKING_STATUSES };

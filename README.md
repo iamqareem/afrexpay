@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project is a multi-tenant storefront backend built with **Node.js**, **Express**, and **PostgreSQL**. It is containerized using **Docker** and orchestrated with **Docker Compose**. The platform includes:
+This project is a multi-tenant storefront backend built with **Node.js**, **Express**, and **PostgreSQL**. Only Postgres runs containerized (podman); the app itself runs on the host under **pm2**. The platform includes:
 - A single Node.js process serving both the admin dashboard and tenant storefronts.
 - Database migrations managed by `node-pg-migrate`.
 - A theme system for customizable storefront UI.
@@ -19,9 +19,7 @@ a new store.
 
 ```
 afrexpay/
-  docker-compose.yml     # Postgres only (bound to 127.0.0.1); the app runs under pm2 by default
-  Dockerfile
-  docker-entrypoint.sh    # runs migrations, then starts the server
+  docker-compose.yml     # Postgres only (bound to 127.0.0.1, run with podman); the app runs under pm2
   migrations/               # node-pg-migrate — the single source of truth for schema
   data/                    # created on first run — Postgres data + media, all here
     postgres/
@@ -293,10 +291,10 @@ npm run migrate:down    # roll back the most recent one
 npm run migrate:create some-description   # scaffold a new migration file
 ```
 
-The Docker image runs migrations automatically on every container start
-(`docker-entrypoint.sh`, before the server boots) — safe to leave running
-across deploys, since already-applied migrations are tracked in a
-`pgmigrations` table and skipped on subsequent runs.
+Run migrations manually on every deploy before restarting the app
+(`npm run migrate:up`) — already-applied migrations are tracked in a
+`pgmigrations` table and skipped on subsequent runs, so it is safe to run
+on every deploy.
 
 ## Services & bookings — a second business vertical
 
@@ -639,14 +637,14 @@ Any tenant's `theme_slug` in `store_configs` can then point at it — the
 
 ## Running it
 
-Docker is Postgres-only; the app itself runs under pm2 (`ecosystem.config.js`,
+Postgres runs in a podman container; the app itself runs under pm2 (`ecosystem.config.js`,
 single fork — the tenant cache is in-process, so never scale past 1 without
 moving it to Redis first).
 
 ```bash
 cp .env.example .env      # set POSTGRES_PASSWORD, JWT_SECRET (16+ chars),
                           # and PAYMENT_ENCRYPTION_KEY (64 hex chars) for real use
-docker compose up -d      # Postgres on 127.0.0.1:5432
+podman compose up -d      # Postgres on 127.0.0.1:5432
 npm run migrate:up        # apply pending migrations
 npm run pm2               # start afrexpay (logs: npm run pm2:logs)
 ```
@@ -661,8 +659,8 @@ placement with stock decrement (including a rollback check on an oversell
 attempt), theme-aware storefront serving, tenant-scoped media isolation, the
 full admin dashboard flow, base-domain signup with the cross-subdomain
 cookie fix, and photo upload (including rejecting oversized/wrong-type files)
-all passed. `docker-compose.yml` is syntax-validated; on first deploy run
-`docker compose up -d`, confirm the db healthcheck passes, then
+all passed. `docker-compose.yml` (Postgres only) is syntax-validated; on first deploy run
+`podman compose up -d`, confirm the db healthcheck passes, then
 `npm run migrate:up` before `npm run pm2` to catch anything
 environment-specific.
 
@@ -686,16 +684,19 @@ Subdomains don't exist on localhost, so either:
 `main` is the deployable branch. Every push and pull request runs
 `.github/workflows/ci.yml`: install (`npm ci`), full test suite
 (`npm test` — DB-free by design, no Postgres service needed), syntax check
-of all backend entry points, and a `docker build` smoke test so a broken
-Dockerfile can't merge silently.
+of all backend entry points, and compose-file validation for the Postgres
+service.
 
-Releases are tags (`v1.2.3`). Pushing a tag runs
-`.github/workflows/release.yml`, which builds the image and publishes it to
-GitHub Container Registry as `ghcr.io/<owner>/afrexpay:<tag>` (plus
-`latest` for tags on the default branch). Deploy = pull the tag and
-`docker compose up -d`. The image ships migrations and runs them at boot
-(`docker-entrypoint.sh`), so a fresh tag against an old volume migrates
-itself forward with no manual step.
+Releases are tags (`v1.2.3`). Deploy = pull the tag on the VPS, then:
+
+```bash
+npm ci --omit=dev
+npm run migrate:up        # forward-only; already-applied migrations are skipped
+pm2 restart afrexpay      # or `npm run pm2` on first boot
+```
+
+There is no app image and no registry — the VPS runs the Node process
+directly under pm2 with Postgres in podman.
 
 Versioning is `\(MAJOR\).\(MINOR\).\(PATCH\)`: breaking API change, new
 endpoint/feature, fix. The `version` in `package.json` moves with the tag.

@@ -3,6 +3,7 @@ const pool = require("../../db/pool");
 const { parseListParams, searchCondition } = require("../../lib/list-query");
 const { getProvider } = require("../payments/providers");
 const { getDecryptedCredentials } = require("../payments/credentials.service");
+const { recordCheckoutSession } = require("../payments/checkout-sessions.service");
 
 async function createReservation(tenantId, { listingId, name, phone, message }) {
   const listingResult = await pool.query(
@@ -72,6 +73,8 @@ async function startCheckout(tenantId, reservationId, { successUrl, cancelUrl, p
     throw Object.assign(new Error("Invalid provider session field."), { status: 400 });
   }
   await pool.query(`UPDATE listing_reservations SET ${sessionIdField} = $2 WHERE tenant_id = $3 AND id = $1`, [reservationId, sessionId, tenantId]);
+  // History, not just the current column (see startOrderCheckout).
+  await recordCheckoutSession(provider, sessionId, tenantId, "listing_reservation", reservation.id);
   return { checkoutUrl };
 }
 
@@ -89,9 +92,13 @@ async function markReservationPaid(tenantId, sessionId, amountMinor, currency, p
     const sessionIdField = provider === "paypal" ? "paypal_checkout_session_id" : "stripe_checkout_session_id";
     const { rows } = await client.query(
       `UPDATE listing_reservations SET payment_status = 'paid'
-       WHERE tenant_id = $1 AND ${sessionIdField} = $2 AND payment_status = 'pending'
+       WHERE tenant_id = $1 AND payment_status IN ('pending', 'failed')
+         AND (${sessionIdField} = $2 OR id IN (
+           SELECT entity_id FROM checkout_sessions
+           WHERE provider = $3 AND session_id = $2 AND tenant_id = $1 AND entity_type = 'listing_reservation'
+         ))
        RETURNING id, listing_id, name, phone`,
-      [tenantId, sessionId]
+      [tenantId, sessionId, provider]
     );
     const reservation = rows[0];
     if (!reservation) {
@@ -109,14 +116,14 @@ async function markReservationPaid(tenantId, sessionId, amountMinor, currency, p
     );
     const expectedAmount = listingRows.rows[0]?.deposit_amount_minor;
     const expectedCurrency = listingRows.rows[0]?.currency;
-    if (!amountMinor || (expectedAmount && amountMinor < expectedAmount)) {
+    if (!amountMinor || (expectedAmount && amountMinor !== expectedAmount)) {
       await client.query("ROLLBACK");
       console.error(`Reservation ${reservation.id} underpaid: expected ${expectedAmount} ${expectedCurrency}, got ${amountMinor} ${currency}`);
       try {
         await pool.query(
           `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
            VALUES ($1, 'listing_reservation', $2, $3, $4, $5, $6, 'failed')`,
-          [tenantId, reservation.id, provider, providerRef || sessionId, amountMinor || 0, currency || expectedCurrency]
+          [tenantId, reservation.id, provider, `${providerRef || sessionId}:failed:${Date.now()}`, amountMinor || 0, currency || expectedCurrency]
         );
       } catch {}
       return null;
@@ -128,7 +135,7 @@ async function markReservationPaid(tenantId, sessionId, amountMinor, currency, p
         await pool.query(
           `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
            VALUES ($1, 'listing_reservation', $2, $3, $4, $5, $6, 'failed')`,
-          [tenantId, reservation.id, provider, providerRef || sessionId, amountMinor || 0, currency || expectedCurrency]
+          [tenantId, reservation.id, provider, `${providerRef || sessionId}:failed:${Date.now()}`, amountMinor || 0, currency || expectedCurrency]
         );
       } catch {}
       return null;
@@ -155,6 +162,17 @@ async function markReservationPaid(tenantId, sessionId, amountMinor, currency, p
   }
 }
 
+// Public return-page helper (see getOrderPaymentStatus). listing_id is
+// included so the storefront only celebrates a deposit for the listing the
+// buyer is actually looking at.
+async function getReservationPaymentStatus(tenantId, reservationId) {
+  const { rows } = await pool.query(
+    `SELECT id, listing_id, payment_status FROM listing_reservations WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, reservationId]
+  );
+  return rows[0] || null;
+}
+
 async function listReservations(tenantId, params = {}) {
   const { search, limit, offset, dir } = parseListParams(params);
   const conditions = [`r.tenant_id = $1`];
@@ -171,4 +189,4 @@ async function listReservations(tenantId, params = {}) {
   return rows;
 }
 
-module.exports = { createReservation, startCheckout, markReservationPaid, listReservations };
+module.exports = { createReservation, startCheckout, markReservationPaid, listReservations, getReservationPaymentStatus };

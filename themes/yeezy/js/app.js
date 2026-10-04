@@ -11,6 +11,14 @@ const money = (n, currency = "UGX") => {
   return `${code} ${(Number(n) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
+// Merchant-controlled strings must never hit innerHTML raw.
+const esc = (s) =>
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
 // --- Central State Store ---
 class Store extends EventTarget {
   constructor() {
@@ -25,7 +33,7 @@ class Store extends EventTarget {
       isCartOpen: false,
       isCheckoutOpen: false,
       confirmedOrderId: null,
-      confirmedOrderPaid: false, // set from our own Stripe return redirect — UX banner only
+      confirmedOrderPaid: false, // server-verified on return redirect — UX banner only
     };
   }
 
@@ -214,10 +222,10 @@ class YeezyProductCard extends HTMLElement {
     this.innerHTML = `
       <div class="product-card group cursor-pointer h-full flex flex-col">
         <div class="bg-[#f5f5f5] aspect-square overflow-hidden relative">
-          ${this._img ? `<img src="${this._img}" alt="${this._product.name}" loading="lazy" onerror="this.style.display='none'" class="w-full h-full object-cover transition-transform duration-500" />` : `<div class="w-full h-full flex items-center justify-center text-[#000000b3] text-xs">NO IMAGE</div>`}
+          ${this._img ? `<img src="${this._img}" alt="${esc(this._product.name)}" loading="lazy" onerror="this.style.display='none'" class="w-full h-full object-cover transition-transform duration-500" />` : `<div class="w-full h-full flex items-center justify-center text-[#000000b3] text-xs">NO IMAGE</div>`}
         </div>
         <div class="pt-3 pb-1 px-0 flex-1 flex flex-col">
-          <p class="yeezy-font text-sm tracking-tightest text-[#000]">${this._product.name}</p>
+          <p class="yeezy-font text-sm tracking-tightest text-[#000]">${esc(this._product.name)}</p>
           <p class="yeezy-font text-sm text-[#000] mt-auto pt-1">${money(this._product.price_minor, currency)}</p>
         </div>
       </div>
@@ -299,7 +307,7 @@ class YeezyDetail extends HTMLElement {
     
     if (product.sizes && product.sizes.length > 0) {
       sizesContainer.innerHTML = product.sizes.map((s, i) => `
-        <button class="size-btn yeezy-font border border-[#0000001f] px-4 py-2 hover:border-[#000] transition-colors ${i===0?'border-[#000] font-bold':''}" data-size="${s}">${s}</button>
+        <button class="size-btn yeezy-font border border-[#0000001f] px-4 py-2 hover:border-[#000] transition-colors ${i===0?'border-[#000] font-bold':''}" data-size="${esc(s)}">${esc(s)}</button>
       `).join('');
       selectedSize = product.sizes[0];
       
@@ -404,8 +412,8 @@ class YeezyCart extends HTMLElement {
     itemsContainer.innerHTML = cart.map((item, index) => `
       <div class="flex items-start justify-between gap-3 pb-4 border-b border-[#0000001f]">
         <div class="flex-1">
-          <p class="text-sm font-medium yeezy-font">${item.name}</p>
-          <p class="text-xs text-[#000000b3] yeezy-font">SIZE ${item.size}</p>
+          <p class="text-sm font-medium yeezy-font">${esc(item.name)}</p>
+          <p class="text-xs text-[#000000b3] yeezy-font">SIZE ${esc(item.size)}</p>
           <div class="flex items-center gap-3 mt-2">
             <button data-qdown="${index}" class="w-6 h-6 border border-[#0000001f] hover:border-[#000] flex items-center justify-center text-xs">-</button>
             <span class="text-sm">${item.qty}</span>
@@ -561,12 +569,17 @@ class YeezyCheckout extends HTMLElement {
 
     // If Stripe redirected back here (successUrl/cancelUrl both point at
     // this same page with an `order` param), reopen the confirmation —
-    // with the paid banner when `paid=1` is present.
+    // paid or not is decided server-side below, never from ?paid=1.
     const params = new URLSearchParams(window.location.search);
     const returnOrderId = params.get("order");
     if (returnOrderId) {
-      store.set('confirmedOrderPaid', params.get("paid") === "1");
-      store.set('confirmedOrderId', returnOrderId);
+      fetch(`/api/orders/${returnOrderId}/status`)
+        .then((res) => (res.ok ? res.json() : null))
+        .catch(() => null)
+        .then((data) => {
+          store.set('confirmedOrderPaid', data?.payment_status === "paid");
+          store.set('confirmedOrderId', returnOrderId);
+        });
     }
   }
 }

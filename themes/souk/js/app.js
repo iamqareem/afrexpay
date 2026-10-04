@@ -218,11 +218,21 @@ function closeCheckout() {
   document.getElementById("checkout-overlay").classList.add("hidden");
   document.getElementById("checkout-overlay").classList.remove("flex");
 }
-function openConfirm(orderId, paid) {
+async function openConfirm(orderId) {
   state.lastOrderId = orderId;
   document.getElementById("confirm-id").textContent = orderId.slice(0, 8);
-  // Purely a UX confirmation — the order's real payment_status is set
-  // server-side by the webhook, never by this client-side redirect.
+  // Never trust the ?paid=1 query param (anyone can forge a query string)
+  // — ask the server for the order's real payment_status. Unreachable or
+  // unpaid both render the pay-now path, never the paid banner.
+  let paid = false;
+  try {
+    const res = await fetch(`/api/orders/${orderId}/status`);
+    if (res.ok) paid = (await res.json()).payment_status === "paid";
+  } catch {
+    paid = false;
+  }
+  // The paid banner reflects the webhook-set payment_status above, never
+  // the client-side redirect that brought the buyer here.
   document.getElementById("confirm-paid").classList.toggle("hidden", !paid);
   const slot = document.getElementById("pay-now-slot");
   slot.classList.toggle("hidden", !!paid);
@@ -270,7 +280,7 @@ async function handleCheckoutSubmit(e) {
     form.reset();
     closeCheckout();
     closeCart();
-    openConfirm(data.id, false);
+    openConfirm(data.id);
   } catch (err) {
     errorEl.textContent = err.message;
     errorEl.classList.remove("hidden");
@@ -301,11 +311,11 @@ async function init() {
 
   // If Stripe redirected back here (successUrl/cancelUrl both point at
   // this same page with an `order` param), reopen the confirm overlay —
-  // with the paid banner when `paid=1` is present.
+  // paid or not is decided server-side inside openConfirm.
   const params = new URLSearchParams(window.location.search);
   const returnOrderId = params.get("order");
   if (returnOrderId) {
-    openConfirm(returnOrderId, params.get("paid") === "1");
+    openConfirm(returnOrderId);
   }
 }
 

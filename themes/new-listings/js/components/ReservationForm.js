@@ -1,4 +1,4 @@
-import { money } from '../helpers.js';
+import { money, esc } from '../helpers.js';
 
 export default class ReservationForm {
   constructor(container, listing, config) {
@@ -7,7 +7,36 @@ export default class ReservationForm {
     this.config = config;
     this.processing = false;
     this.error = null;
+    this.payMethods = null; // { stripe: bool, paypal: bool } — loaded async
     this.render();
+    this.loadPayMethods();
+  }
+
+  selectedProvider() {
+    const picked = document.querySelector('#reservation-panel input[name="pay-provider"]:checked');
+    return picked ? picked.value : undefined; // undefined → backend default (stripe)
+  }
+
+  async loadPayMethods() {
+    try {
+      const res = await fetch('/api/config/payment-methods');
+      if (!res.ok) return;
+      this.payMethods = await res.json();
+    } catch {
+      return;
+    }
+    const available = ['stripe', 'paypal'].filter((p) => this.payMethods && this.payMethods[p]);
+    // 0-1 methods: preselect silently (backend defaults to stripe).
+    if (available.length < 2) return;
+    const box = document.getElementById('reservation-pay-methods');
+    if (!box) return;
+    const labels = { stripe: 'Card', paypal: 'PayPal' };
+    box.innerHTML =
+      '<p class="text-xs text-muted mb-2">Pay with</p>' +
+      available
+        .map((p, i) => `<label class="inline-flex items-center gap-1.5 mr-4"><input type="radio" name="pay-provider" value="${p}"${i === 0 ? ' checked' : ''} />${labels[p]}</label>`)
+        .join('');
+    box.classList.remove('hidden');
   }
 
   render() {
@@ -28,7 +57,8 @@ export default class ReservationForm {
             <label class="block text-xs text-muted mb-1">Message (optional)</label>
             <textarea name="message" rows="2" class="w-full bg-ink border border-surface2 rounded-md px-3 py-2"></textarea>
           </div>
-          <p id="reservation-error" class="text-sm hidden" style="color:#e5534b;">${this.error || ''}</p>
+          <p id="reservation-error" class="text-sm hidden" style="color:#e5534b;">${esc(this.error) || ''}</p>
+          <div id="reservation-pay-methods" class="hidden"></div>
           <button type="submit" id="reservation-submit" class="w-full bg-accent text-onaccent font-bold py-2.5 rounded-md" ${this.processing ? 'disabled' : ''}>
             ${this.processing ? 'PROCESSING...' : 'PAY DEPOSIT TO RESERVE'}
           </button>
@@ -74,7 +104,7 @@ export default class ReservationForm {
       const checkoutRes = await fetch(`/api/listing-reservations/${reservation.id}/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ successUrl: successUrl.toString(), cancelUrl }),
+        body: JSON.stringify({ successUrl: successUrl.toString(), cancelUrl, provider: this.selectedProvider() }),
       });
       const checkout = await checkoutRes.json();
       if (!checkoutRes.ok) throw new Error(checkout.error || 'Could not start checkout.');

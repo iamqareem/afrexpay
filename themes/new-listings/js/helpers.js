@@ -10,6 +10,15 @@ export function money(minor, currency = 'USD') {
   return `${code} ${(Number(minor) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// Merchant-controlled strings must never hit innerHTML raw.
+export function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 export function applyConfig(config) {
   if (config.accentColor) document.documentElement.style.setProperty('--accent', config.accentColor);
   if (config.accentColor2) document.documentElement.style.setProperty('--accent2', config.accentColor2);

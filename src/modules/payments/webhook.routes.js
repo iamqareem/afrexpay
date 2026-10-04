@@ -33,7 +33,7 @@ router.post("/paypal/:tenantId", express.raw({ type: "application/json" }), asyn
 });
 
 // PayPal context service for storing and retrieving order context
-const { setPayPalOrderContext, getPayPalOrderContext } = require('./paypal-context.service');
+const { getPayPalOrderContext } = require("./paypal-context.service");
 
 // Generic provider-agnostic handler for both
 async function handleStripeWebhook(req, res) {
@@ -51,7 +51,7 @@ async function handleStripeWebhook(req, res) {
 
   let event;
   try {
-    const stripeProvider = require("./providers/stripe.provider");
+    const stripeProvider = require("./stripe.provider");
     event = stripeProvider.verifyWebhook({
       payload: req.body,
       signature,
@@ -93,11 +93,38 @@ async function handlePayPalWebhook(req, res) {
     return res.status(400).json({ error: "Invalid signature." });
   }
 
-  // Only completed captures confirm payment. DENIED/REFUNDED/PENDING must
-  // not mark an order paid; APPROVED alone is not a capture either.
-  const relevantTypes = ["CHECKOUT.ORDER.COMPLETED", "PAYMENT.CAPTURE.COMPLETED"];
-
-  if (!relevantTypes.includes(event.event_type)) {
+  // Only a COMPLETED capture confirms payment. CHECKOUT.ORDER.COMPLETED
+  // fires on buyer approval — funds are not captured yet — so the order is
+  // re-read from PayPal and a COMPLETED capture is required before
+  // anything is marked paid. Anything else (DENIED/REFUNDED/PENDING, or
+  // approval without capture) is acknowledged without side effects.
+  if (event.event_type === "CHECKOUT.ORDER.COMPLETED") {
+    const paypalReader = require("./providers/paypal.provider");
+    let order;
+    try {
+      const orderRes = await paypalReader.getOrder({
+        clientId: credentials.publishableKey,
+        clientSecret: credentials.secretKey,
+        orderId: event.resource?.id,
+        mode: credentials.mode,
+      });
+      order = orderRes.result;
+    } catch (err) {
+      console.error("PayPal order re-read failed:", err.message);
+      return res.status(200).json({ received: true });
+    }
+    const captures = (order.purchase_units || []).flatMap((pu) => pu.payments?.captures || []);
+    const completed = captures.find((c) => c.status === "COMPLETED");
+    if (!completed) return res.status(200).json({ received: true });
+    // Hand downstream the capture shape it already understands.
+    event = {
+      event_type: "PAYMENT.CAPTURE.COMPLETED",
+      resource: {
+        ...completed,
+        supplementary_data: { related_ids: { order_id: event.resource.id } },
+      },
+    };
+  } else if (event.event_type !== "PAYMENT.CAPTURE.COMPLETED") {
     return res.status(200).json({ received: true });
   }
 

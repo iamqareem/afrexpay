@@ -1,4 +1,4 @@
-import { money } from '../helpers.js';
+import { money, esc } from '../helpers.js';
 import InquiryForm from './InquiryForm.js';
 import ReservationForm from './ReservationForm.js';
 
@@ -33,10 +33,10 @@ export default class DetailView {
       <div>
         <button id="back-btn" class="text-accent text-sm mb-4">&larr; Back to listings</button>
         <div class="grid grid-cols-2 gap-2 mb-6">${photosHtml}</div>
-        <h2 class="font-display text-2xl mb-1">${l.title}</h2>
+        <h2 class="font-display text-2xl mb-1">${esc(l.title)}</h2>
         <p class="text-accent text-lg font-semibold mb-2">${money(l.price_minor, currency)}</p>
-        <p class="text-muted text-sm mb-4">${[l.bedrooms ? l.bedrooms + ' bedrooms' : null, l.bathrooms ? l.bathrooms + ' bathrooms' : null, l.area_sqm ? l.area_sqm + ' sqm' : null, l.location].filter(Boolean).join(' · ')}</p>
-        <p class="mb-8">${l.description || ''}</p>
+        <p class="text-muted text-sm mb-4">${[l.bedrooms ? l.bedrooms + ' bedrooms' : null, l.bathrooms ? l.bathrooms + ' bathrooms' : null, l.area_sqm ? l.area_sqm + ' sqm' : null, esc(l.location)].filter(Boolean).join(' · ')}</p>
+        <p class="mb-8">${esc(l.description) || ''}</p>
 
         <div id="forms-container"></div>
       </div>

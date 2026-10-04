@@ -65,7 +65,7 @@ export default class App {
     });
   }
 
-  showDetail(listing) {
+  async showDetail(listing) {
     this.root.innerHTML = '';
     const view = new DetailView(this.root, listing, this.config, () => {
       this.selectedListing = null;
@@ -76,17 +76,33 @@ export default class App {
       this.render();
     });
 
-    // if we came back from Stripe with 'reservation' param, show confirmation
-    if (getParam('reservation')) {
-      const formsContainer = document.getElementById('forms-container');
-      if (formsContainer) {
-        const confirmedDiv = document.createElement('div');
-        confirmedDiv.className = 'max-w-md bg-surface border border-surface2 rounded-lg p-5 mt-4';
-        confirmedDiv.innerHTML = `
-          <p class="text-accent font-semibold mb-1">Deposit received ✓</p>
-          <p class="text-muted text-sm">Your reservation is confirmed. The merchant will be in touch shortly.</p>
-        `;
-        formsContainer.parentNode.insertBefore(confirmedDiv, formsContainer.nextSibling);
+    // If we came back from the provider with a 'reservation' param, only
+    // celebrate when the server confirms THIS listing's deposit is paid —
+    // the query string alone proves nothing (only the webhook flips
+    // payment_status). Otherwise the detail view keeps its pay option.
+    const reservationParam = getParam('reservation');
+    if (reservationParam && this.selectedListing) {
+      let paidHere = false;
+      try {
+        const res = await fetch(`/api/listing-reservations/${reservationParam}/status`);
+        if (res.ok) {
+          const data = await res.json();
+          paidHere = data.payment_status === 'paid' && data.listing_id === this.selectedListing.id;
+        }
+      } catch {
+        paidHere = false;
+      }
+      if (paidHere) {
+        const formsContainer = document.getElementById('forms-container');
+        if (formsContainer) {
+          const confirmedDiv = document.createElement('div');
+          confirmedDiv.className = 'max-w-md bg-surface border border-surface2 rounded-lg p-5 mt-4';
+          confirmedDiv.innerHTML = `
+            <p class="text-accent font-semibold mb-1">Deposit received ✓</p>
+            <p class="text-muted text-sm">Your reservation is confirmed. The merchant will be in touch shortly.</p>
+          `;
+          formsContainer.parentNode.insertBefore(confirmedDiv, formsContainer.nextSibling);
+        }
       }
       // clean query param
       const url = new URL(window.location);

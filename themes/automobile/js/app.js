@@ -11,6 +11,14 @@ const money = (n, currency = "UGX") => {
   return `${code} ${(Number(n) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
+// Merchant-controlled strings must never hit innerHTML raw.
+const esc = (s) =>
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
 class Store extends EventTarget {
   constructor() {
     super();
@@ -26,7 +34,7 @@ class Store extends EventTarget {
       isCartOpen: false,
       isCheckoutOpen: false,
       confirmedOrderId: null,
-      confirmedOrderPaid: false, // set from our own Stripe return redirect — UX banner only
+      confirmedOrderPaid: false, // server-verified on return redirect — UX banner only
     };
   }
 
@@ -230,12 +238,12 @@ class AutoProductCard extends HTMLElement {
     this.innerHTML = `
       <div class="card cursor-pointer group h-full flex flex-col">
         <div class="aspect-[4/3] bg-surfaceVariant p-8 flex items-center justify-center relative overflow-hidden rounded-t-4xl">
-          ${this._img ? `<img src="${this._img}" alt="${this._product.name}" loading="lazy" onerror="this.style.display='none'" class="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500" />` : `<div class="text-onSurfaceVariant text-sm font-medium">NO IMAGE</div>`}
+          ${this._img ? `<img src="${this._img}" alt="${esc(this._product.name)}" loading="lazy" onerror="this.style.display='none'" class="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500" />` : `<div class="text-onSurfaceVariant text-sm font-medium">NO IMAGE</div>`}
         </div>
         <div class="p-6 md:p-8 flex flex-col flex-1 bg-surface">
-          ${this._product.category ? `<span class="text-xs font-bold text-primary uppercase tracking-wider mb-2">${this._product.category}</span>` : ''}
-          <h3 class="text-2xl font-bold text-onSurface mb-2 tracking-tight">${this._product.name}</h3>
-          <p class="text-onSurfaceVariant text-sm line-clamp-2 mb-6">${this._product.blurb || ''}</p>
+          ${this._product.category ? `<span class="text-xs font-bold text-primary uppercase tracking-wider mb-2">${esc(this._product.category)}</span>` : ''}
+          <h3 class="text-2xl font-bold text-onSurface mb-2 tracking-tight">${esc(this._product.name)}</h3>
+          <p class="text-onSurfaceVariant text-sm line-clamp-2 mb-6">${esc(this._product.blurb) || ''}</p>
           <div class="mt-auto flex items-center justify-between">
              <span class="text-lg font-bold text-onSurface">${money(this._product.price_minor, currency)}</span>
              <button class="btn-outline !py-2 !px-4 text-sm opacity-0 group-hover:opacity-100 transition-opacity">Details</button>
@@ -336,7 +344,7 @@ class AutoQuickView extends HTMLElement {
     selectEl.innerHTML = '';
     
     if (product.sizes && product.sizes.length > 0) {
-      selectEl.innerHTML = product.sizes.map(s => `<option value="${s}">${s}</option>`).join('');
+      selectEl.innerHTML = product.sizes.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
       selectEl.disabled = false;
     } else {
       selectEl.innerHTML = `<option value="">Standard Configuration</option>`;
@@ -430,8 +438,8 @@ class AutoCart extends HTMLElement {
       <div class="flex flex-col gap-3 pb-6 border-b border-surfaceVariant last:border-0 last:pb-0">
         <div class="flex justify-between items-start">
           <div>
-            <p class="font-bold text-lg text-onSurface mb-1">${item.name}</p>
-            <p class="text-sm text-onSurfaceVariant font-medium">Config: ${item.size}</p>
+            <p class="font-bold text-lg text-onSurface mb-1">${esc(item.name)}</p>
+            <p class="text-sm text-onSurfaceVariant font-medium">Config: ${esc(item.size)}</p>
           </div>
           <span class="font-bold text-onSurface">${money(item.priceMinor * item.qty, currency)}</span>
         </div>
@@ -595,12 +603,17 @@ class AutoCheckout extends HTMLElement {
 
     // If Stripe redirected back here (successUrl/cancelUrl both point at
     // this same page with an `order` param), reopen the confirmation —
-    // with the paid banner when `paid=1` is present.
+    // paid or not is decided server-side below, never from ?paid=1.
     const params = new URLSearchParams(window.location.search);
     const returnOrderId = params.get("order");
     if (returnOrderId) {
-      store.set('confirmedOrderPaid', params.get("paid") === "1");
-      store.set('confirmedOrderId', returnOrderId);
+      fetch(`/api/orders/${returnOrderId}/status`)
+        .then((res) => (res.ok ? res.json() : null))
+        .catch(() => null)
+        .then((data) => {
+          store.set('confirmedOrderPaid', data?.payment_status === "paid");
+          store.set('confirmedOrderId', returnOrderId);
+        });
     }
   }
 }
@@ -632,8 +645,8 @@ class AutoCategories extends HTMLElement {
     }
 
     list.innerHTML = categories.map(cat => `
-      <button data-cat="${cat}" class="px-6 py-2.5 rounded-full text-sm font-bold tracking-wide transition-all ${cat === selected ? 'bg-onSurface text-surface shadow-soft' : 'bg-surfaceVariant text-onSurfaceVariant hover:bg-onSurfaceVariant/20 hover:text-onSurface'}">
-        ${cat}
+      <button data-cat="${esc(cat)}" class="px-6 py-2.5 rounded-full text-sm font-bold tracking-wide transition-all ${cat === selected ? 'bg-onSurface text-surface shadow-soft' : 'bg-surfaceVariant text-onSurfaceVariant hover:bg-onSurfaceVariant/20 hover:text-onSurface'}">
+        ${esc(cat)}
       </button>
     `).join('');
 

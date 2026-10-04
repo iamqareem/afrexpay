@@ -2,9 +2,10 @@
 const express = require("express");
 const authRequired = require("../../middleware/auth-required");
 const { publicWriteLimiter } = require("../../middleware/rate-limits");
-const { createOrder, listOrders, startOrderCheckout, updateOrderStatus, ORDER_STATUSES } = require("./order.service");
+const { createOrder, listOrders, getOrderPaymentStatus, startOrderCheckout, updateOrderStatus, ORDER_STATUSES } = require("./order.service");
 const { getConfig } = require("../store-config/config.service");
 const { notifyNewOrder } = require("../notify-matrix/matrix.service");
+const { assertSafeCheckoutRedirects } = require("../../lib/checkout-redirects");
 
 const router = express.Router();
 
@@ -26,10 +27,24 @@ router.post("/", publicWriteLimiter, async (req, res) => {
   }
 });
 
+// Public — the buyer's own return page asks here whether the order is
+// actually paid instead of trusting the ?paid=1 query param. Tenant-scoped,
+// ids unguessable.
+router.get("/:id/status", async (req, res) => {
+  const row = await getOrderPaymentStatus(req.tenant.id, req.params.id);
+  if (!row) return res.status(404).json({ error: "Order not found." });
+  res.json({ id: row.id, status: row.status, payment_status: row.payment_status });
+});
+
 router.post("/:id/checkout", publicWriteLimiter, async (req, res) => {
   const { successUrl, cancelUrl, provider } = req.body || {};
   if (!successUrl || !cancelUrl) {
     return res.status(400).json({ error: "successUrl and cancelUrl are required." });
+  }
+  try {
+    assertSafeCheckoutRedirects(successUrl, cancelUrl, req.tenant);
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
   }
 
   try {

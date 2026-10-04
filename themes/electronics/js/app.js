@@ -11,6 +11,14 @@ const money = (n, currency = "UGX") => {
   return `${code} ${(Number(n) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
+// Merchant-controlled strings must never hit innerHTML raw.
+const esc = (s) =>
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
 // --- Central State Store ---
 class Store extends EventTarget {
   constructor() {
@@ -27,7 +35,7 @@ class Store extends EventTarget {
       isCartOpen: false,
       isCheckoutOpen: false,
       confirmedOrderId: null,
-      confirmedOrderPaid: false, // set from our own Stripe return redirect — UX banner only
+      confirmedOrderPaid: false, // server-verified on return redirect — UX banner only
     };
   }
 
@@ -209,8 +217,8 @@ class TechSidebar extends HTMLElement {
     
     list.innerHTML = categories.map(cat => `
       <li>
-        <button data-cat="${cat}" class="w-full text-left px-3 py-2 rounded-md font-medium text-sm transition-colors ${cat === selected ? 'bg-surface2 text-gold' : 'text-muted hover:text-paper hover:bg-surface'}">
-          ${cat}
+        <button data-cat="${esc(cat)}" class="w-full text-left px-3 py-2 rounded-md font-medium text-sm transition-colors ${cat === selected ? 'bg-surface2 text-gold' : 'text-muted hover:text-paper hover:bg-surface'}">
+          ${esc(cat)}
         </button>
       </li>
     `).join('');
@@ -278,14 +286,14 @@ class TechProductCard extends HTMLElement {
     this.innerHTML = `
       <div class="bg-surface rounded-lg overflow-hidden border border-surface2 hover:border-gold transition-colors flex flex-col h-full cursor-pointer group relative">
         <div class="aspect-square bg-ink p-4 flex items-center justify-center relative overflow-hidden">
-          ${this._img ? `<img src="${this._img}" alt="${this._product.name}" loading="lazy" onerror="this.style.display='none'" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300" />` : `<div class="text-muted text-xs">NO IMAGE</div>`}
+          ${this._img ? `<img src="${this._img}" alt="${esc(this._product.name)}" loading="lazy" onerror="this.style.display='none'" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300" />` : `<div class="text-muted text-xs">NO IMAGE</div>`}
           <div class="absolute inset-0 bg-ink/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
              <span class="bg-gold text-ink font-bold px-4 py-2 rounded-md text-sm">QUICK VIEW</span>
           </div>
         </div>
         <div class="p-5 flex flex-col flex-1">
-          ${this._product.category ? `<span class="text-[10px] font-mono text-gold uppercase tracking-widest mb-2">${this._product.category}</span>` : ''}
-          <h3 class="font-bold text-paper text-lg leading-tight mb-2">${this._product.name}</h3>
+          ${this._product.category ? `<span class="text-[10px] font-mono text-gold uppercase tracking-widest mb-2">${esc(this._product.category)}</span>` : ''}
+          <h3 class="font-bold text-paper text-lg leading-tight mb-2">${esc(this._product.name)}</h3>
           <p class="font-mono text-gold font-bold mt-auto pt-4">${money(this._product.price_minor, currency)}</p>
         </div>
       </div>
@@ -385,7 +393,7 @@ class TechQuickView extends HTMLElement {
     selectEl.innerHTML = '';
     
     if (product.sizes && product.sizes.length > 0) {
-      selectEl.innerHTML = product.sizes.map(s => `<option value="${s}">${s}</option>`).join('');
+      selectEl.innerHTML = product.sizes.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
       selectEl.disabled = false;
     } else {
       selectEl.innerHTML = `<option value="">N/A</option>`;
@@ -478,8 +486,8 @@ class TechCart extends HTMLElement {
     itemsContainer.innerHTML = cart.map((item, index) => `
       <div class="flex items-start justify-between gap-4 pb-4 border-b border-surface2">
         <div class="flex-1">
-          <p class="text-paper font-bold">${item.name}</p>
-          <p class="text-xs text-muted font-mono mt-1">OPT: ${item.size}</p>
+          <p class="text-paper font-bold">${esc(item.name)}</p>
+          <p class="text-xs text-muted font-mono mt-1">OPT: ${esc(item.size)}</p>
           <div class="flex items-center gap-3 mt-3">
             <button data-qdown="${index}" class="w-8 h-8 bg-ink border border-surface2 rounded-md hover:border-gold text-paper flex items-center justify-center">-</button>
             <span class="text-sm font-bold text-paper">${item.qty}</span>
@@ -638,12 +646,17 @@ class TechCheckout extends HTMLElement {
 
     // If Stripe redirected back here (successUrl/cancelUrl both point at
     // this same page with an `order` param), reopen the confirmation —
-    // with the paid banner when `paid=1` is present.
+    // paid or not is decided server-side below, never from ?paid=1.
     const params = new URLSearchParams(window.location.search);
     const returnOrderId = params.get("order");
     if (returnOrderId) {
-      store.set('confirmedOrderPaid', params.get("paid") === "1");
-      store.set('confirmedOrderId', returnOrderId);
+      fetch(`/api/orders/${returnOrderId}/status`)
+        .then((res) => (res.ok ? res.json() : null))
+        .catch(() => null)
+        .then((data) => {
+          store.set('confirmedOrderPaid', data?.payment_status === "paid");
+          store.set('confirmedOrderId', returnOrderId);
+        });
     }
   }
 }

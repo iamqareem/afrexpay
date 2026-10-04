@@ -8,11 +8,19 @@ const ZERO_DECIMAL = new Set([
   "BIF", "CLP", "DJF", "GNF", "JPY", "KMF", "KRW", "MGA",
   "PYG", "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF",
 ]);
-function money(minor) {
-  const code = (state.config.currency || "USD").toUpperCase();
+function money(minor, currency) {
+  const code = String(currency || state.config?.currency || "USD").toUpperCase();
   if (ZERO_DECIMAL.has(code)) return `${code} ${Number(minor).toLocaleString("en-UG")}`;
   return `${code} ${(Number(minor) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+// Merchant-controlled strings must never hit innerHTML raw.
+const esc = (s) =>
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 
 function applyConfig(config) {
   state.config = config;
@@ -34,13 +42,13 @@ function renderGrid() {
       (l) => `
     <div class="listing-card" data-id="${l.id}">
       <div class="w-full aspect-video bg-surface2">
-        ${l.thumbnail_path ? `<img src="/media/${l.thumbnail_path}" alt="${l.title}" loading="lazy" onerror="this.style.display='none'" class="w-full h-full object-cover" />` : ""}
+        ${l.thumbnail_path ? `<img src="/media/${l.thumbnail_path}" alt="${esc(l.title)}" loading="lazy" onerror="this.style.display='none'" class="w-full h-full object-cover" />` : ""}
       </div>
       <div class="p-4">
         <span class="listing-badge">${l.listing_type === "rent" ? "FOR RENT" : "FOR SALE"}</span>
-        <h3 class="font-semibold mt-2">${l.title}</h3>
-        <p class="text-accent font-semibold mt-1">${money(l.price_minor)}</p>
-        <p class="text-muted text-sm mt-1">${[l.bedrooms ? l.bedrooms + " bd" : null, l.bathrooms ? l.bathrooms + " ba" : null, l.location].filter(Boolean).join(" · ")}</p>
+        <h3 class="font-semibold mt-2">${esc(l.title)}</h3>
+        <p class="text-accent font-semibold mt-1">${money(l.price_minor, l.currency)}</p>
+        <p class="text-muted text-sm mt-1">${[l.bedrooms ? l.bedrooms + " bd" : null, l.bathrooms ? l.bathrooms + " ba" : null, esc(l.location)].filter(Boolean).join(" · ")}</p>
       </div>
     </div>`
     )
@@ -236,12 +244,25 @@ async function init() {
   const returnListingId = params.get("listing");
   if (returnListingId) {
     await showDetail(returnListingId);
-    if (params.get("reservation")) {
-      // Purely a UX confirmation banner — the reservation's real
-      // payment_status is set server-side by the webhook (see
-      // reservation.service.js), never by this client-side redirect.
-      document.getElementById("reservation-panel").classList.add("hidden");
-      document.getElementById("reservation-confirmed").classList.remove("hidden");
+    const returnReservationId = params.get("reservation");
+    if (returnReservationId) {
+      // Paid or not is decided server-side: only a webhook-set `paid`
+      // status on THIS listing's reservation shows the banner — otherwise
+      // the reservation panel (with its pay option) stays visible.
+      let paidHere = false;
+      try {
+        const res = await fetch(`/api/listing-reservations/${returnReservationId}/status`);
+        if (res.ok) {
+          const data = await res.json();
+          paidHere = data.payment_status === "paid" && data.listing_id === returnListingId;
+        }
+      } catch {
+        paidHere = false;
+      }
+      if (paidHere) {
+        document.getElementById("reservation-panel").classList.add("hidden");
+        document.getElementById("reservation-confirmed").classList.remove("hidden");
+      }
     }
   }
 }

@@ -111,6 +111,15 @@ async function createCheckoutSession({
   };
 }
 
+// Fetch a PayPal order's current state (used by the webhook to confirm a
+// CHECKOUT.ORDER.APPROVED/COMPLETED event actually captured funds before
+// anything is marked paid — approval alone is not payment).
+async function getOrder({ clientId, clientSecret, orderId, mode = "sandbox" }) {
+  const paypalClient = client(clientId, clientSecret, mode);
+  const request = new paypal.orders.OrdersGetRequest(orderId);
+  return await paypalClient.execute(request);
+}
+
 // Capture a PayPal order after the buyer returns from approval.
 async function captureOrder({ clientId, clientSecret, orderId, mode = "sandbox" }) {
   const paypalClient = client(clientId, clientSecret, mode);
@@ -239,6 +248,7 @@ function normalizePayment(event) {
 
 module.exports = {
   createCheckoutSession,
+  getOrder,
   captureOrder,
   verifyWebhook,
   normalizePayment,
