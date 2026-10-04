@@ -32,6 +32,9 @@ router.post("/paypal/:tenantId", express.raw({ type: "application/json" }), asyn
   await handlePayPalWebhook(req, res);
 });
 
+// PayPal context service for storing and retrieving order context
+const { setPayPalOrderContext, getPayPalOrderContext } = require('./paypal-context.service');
+
 // Generic provider-agnostic handler for both
 async function handleStripeWebhook(req, res) {
   const { tenantId } = req.params;

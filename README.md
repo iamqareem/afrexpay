@@ -748,11 +748,10 @@ there is no `ORDER BY` injection surface. Shared parsing lives in
 - `GET /admin` — merchant dashboard (same UI for every tenant)
 - `GET /media/<filename>` — tenant-scoped product photos
 
-## Not built yet, deliberately
+## PayPal Integration
 
-- PayPal — shipped via the provider registry (`src/modules/payments/providers/`),
-  same shape as Stripe; merchants pick a provider per checkout and the
-  dashboard shows the correct per-provider webhook URL
+- PayPal — fully integrated via the provider registry (`src/modules/payments/providers/`),
+  same shape as Stripe; merchants can now choose PayPal as a payment option during checkout.
 - ~~Abandoned-checkout stock restore~~ — shipped: an hourly sweep
   (`releaseAbandonedOrders` / `releaseAbandonedBookings`, server.js timer,
   default 24h TTL matching Stripe session expiry) cancels `pending`/`pending`

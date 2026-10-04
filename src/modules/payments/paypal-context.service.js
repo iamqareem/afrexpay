@@ -1,25 +1,26 @@
 // src/modules/payments/paypal-context.service.js
-const pool = require("../../db/pool");
+//
+// Service for storing and retrieving PayPal order context
+//
+const pool = require('../../db/pool');
 
-async function savePayPalOrderContext(paypalOrderId, tenantId, entityType, entityId) {
-  await pool.query(
-    `INSERT INTO paypal_order_context (paypal_order_id, tenant_id, entity_type, entity_id)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (paypal_order_id) DO UPDATE SET
-       tenant_id = EXCLUDED.tenant_id,
-       entity_type = EXCLUDED.entity_type,
-       entity_id = EXCLUDED.entity_id`,
-    [paypalOrderId, tenantId, entityType, entityId]
-  );
+// Stores the context of a PayPal order
+async function setPayPalOrderContext(orderId, entityType, tenantId) {
+  const query = {
+    text: `INSERT INTO paypal_order_contexts (order_id, entity_type, tenant_id) VALUES ($1, $2, $3) ON CONFLICT (order_id) DO UPDATE SET entity_type = $2, tenant_id = $3`, 
+    values: [orderId, entityType, tenantId],
+  };
+  await pool.query(query);
 }
 
-async function getPayPalOrderContext(paypalOrderId) {
-  const { rows } = await pool.query(
-    `SELECT paypal_order_id, tenant_id, entity_type, entity_id, created_at
-     FROM paypal_order_context WHERE paypal_order_id = $1`,
-    [paypalOrderId]
-  );
-  return rows[0] || null;
+// Retrieves the context of a PayPal order
+async function getPayPalOrderContext(orderId) {
+  const query = {
+    text: `SELECT entity_type, tenant_id FROM paypal_order_contexts WHERE order_id = $1`, 
+    values: [orderId],
+  };
+  const result = await pool.query(query);
+  return result.rows[0];
 }
 
-module.exports = { savePayPalOrderContext, getPayPalOrderContext };
+module.exports = { setPayPalOrderContext, getPayPalOrderContext };
