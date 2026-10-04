@@ -26,8 +26,8 @@ async function createTenantWithOwner({ businessName, subdomain, email, password,
     );
     const tenant = tenantResult.rows[0];
 
-    await client.query(
-      `INSERT INTO users (tenant_id, email, password_hash, role) VALUES ($1, $2, $3, 'owner')`,
+    const userResult = await client.query(
+      `INSERT INTO users (tenant_id, email, password_hash, role) VALUES ($1, $2, $3, 'owner') RETURNING id`,
       [tenant.id, email, passwordHash]
     );
 
@@ -38,7 +38,7 @@ async function createTenantWithOwner({ businessName, subdomain, email, password,
     );
 
     await client.query("COMMIT");
-    return tenant;
+    return { ...tenant, userId: userResult.rows[0].id, tokenVersion: 0 };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
@@ -49,7 +49,7 @@ async function createTenantWithOwner({ businessName, subdomain, email, password,
 
 async function verifyLogin({ email, password }) {
   const { rows } = await pool.query(
-    `SELECT u.id, u.tenant_id, u.password_hash, u.role, t.subdomain
+    `SELECT u.id, u.tenant_id, u.password_hash, u.role, u.token_version, t.subdomain
      FROM users u JOIN tenants t ON t.id = u.tenant_id
      WHERE LOWER(u.email) = LOWER($1)`,
     [email]
@@ -60,7 +60,7 @@ async function verifyLogin({ email, password }) {
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) return null;
 
-  return { userId: user.id, tenantId: user.tenant_id, subdomain: user.subdomain, role: user.role };
+  return { userId: user.id, tenantId: user.tenant_id, subdomain: user.subdomain, role: user.role, tokenVersion: user.token_version ?? 0 };
 }
 
 function issueToken(payload) {
@@ -114,7 +114,7 @@ async function resetPasswordWithToken(rawToken, newPassword) {
       await client.query("ROLLBACK");
       return false;
     }
-    await client.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [passwordHash, record.user_id]);
+    await client.query(`UPDATE users SET password_hash = $1, token_version = token_version + 1 WHERE id = $2`, [passwordHash, record.user_id]);
     await client.query("COMMIT");
     return true;
   } catch (err) {
@@ -125,7 +125,15 @@ async function resetPasswordWithToken(rawToken, newPassword) {
   }
 }
 
+// Null when the user is gone — also a revocation (deleted users keep
+// no valid sessions).
+async function getUserTokenVersion(userId) {
+  if (!userId) return null;
+  const { rows } = await pool.query(`SELECT token_version FROM users WHERE id = $1`, [userId]);
+  return rows[0] ? (rows[0].token_version ?? 0) : null;
+}
+
 module.exports = {
-  createTenantWithOwner, verifyLogin, issueToken, verifyToken,
+  createTenantWithOwner, verifyLogin, issueToken, verifyToken, getUserTokenVersion,
   createPasswordResetToken, resetPasswordWithToken,
 };

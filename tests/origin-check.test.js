@@ -48,11 +48,15 @@ test("isAllowedOrigin refuses attacker tenants, lookalikes and other tenants", (
   }
 });
 
-test("authRequired refuses cross-origin mutations but allows reads and headerless clients", () => {
+test("authRequired refuses cross-origin mutations but allows reads and headerless clients", async () => {
   const authRequired = require("../src/middleware/auth-required");
   const { issueToken } = require("../src/modules/auth/auth.service");
+  const pool = require("../src/db/pool");
   const tenantRow = { id: "tenant-1", subdomain: "glow-salon", custom_domain: null };
-  const token = issueToken({ tenantId: "tenant-1", subdomain: "glow-salon" });
+  const token = issueToken({ tenantId: "tenant-1", subdomain: "glow-salon", uid: "u9", tv: 3 });
+  const originalQuery = pool.query;
+  pool.query = async () => ({ rows: [{ token_version: 3 }] });
+  try {
 
   const run = (method, headers) =>
     new Promise((resolve) => {
@@ -69,7 +73,7 @@ test("authRequired refuses cross-origin mutations but allows reads and headerles
       authRequired(req, res, () => resolve({ status: "next", auth: req.auth }));
     });
 
-  return (async () => {
+  await (async () => {
     // Same-origin mutation passes with auth attached.
     assert.strictEqual(
       (await run("PATCH", { origin: "https://glow-salon.afrexpay.com" })).status,
@@ -86,4 +90,7 @@ test("authRequired refuses cross-origin mutations but allows reads and headerles
       "next"
     );
   })();
+  } finally {
+    pool.query = originalQuery;
+  }
 });

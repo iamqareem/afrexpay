@@ -109,9 +109,11 @@ async function tenantResolver(req, res, next) {
   // detection entirely. This bypasses the cache on purpose — a developer
   // testing multiple tenants against the same running process via this
   // override should never see a stale cached value from a moment ago.
-  // Disabled in production — otherwise any caller can create orders/
-  // inquiries under any tenant by guessing ?tenant=slug.
-  if (process.env.NODE_ENV !== "production" && req.query.tenant) {
+  // Explicit opt-in ONLY (ALLOW_TENANT_OVERRIDE=true): the old gate
+  // (NODE_ENV !== "production") was fail-open — any deploy scaffolded
+  // without NODE_ENV set shipped this override live, letting any caller
+  // create orders/inquiries under any tenant by guessing ?tenant=slug.
+  if (process.env.ALLOW_TENANT_OVERRIDE === "true" && req.query.tenant) {
     const slug = req.query.tenant;
     try {
       const tenant = await fetchTenant(slug);

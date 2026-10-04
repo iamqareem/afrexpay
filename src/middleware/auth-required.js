@@ -10,12 +10,12 @@
 // Safe methods skip the check (reads change nothing); callers with neither
 // header are non-browser clients, where CSRF does not apply. Webhooks never
 // pass through here (they verify signatures instead), so they are unaffected.
-const { verifyToken } = require("../modules/auth/auth.service");
+const { verifyToken, getUserTokenVersion } = require("../modules/auth/auth.service");
 const { requestOrigin, isAllowedOrigin } = require("../lib/origin-check");
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
-function authRequired(req, res, next) {
+async function authRequired(req, res, next) {
   if (!req.tenant) {
     return res.status(401).json({ error: "Not logged in." });
   }
@@ -29,6 +29,22 @@ function authRequired(req, res, next) {
     const payload = verifyToken(token);
     if (payload.tenantId !== req.tenant.id) {
       return res.status(403).json({ error: "Not authorized for this store." });
+    }
+    // Revocation: sessions carry the user's id + token version. A password
+    // reset bumps the version, killing every pre-reset session — including
+    // stolen ones. Tokens minted before uid existed are rejected outright
+    // (one re-login after deploy) so nothing irrevocable survives.
+    if (!payload.uid) {
+      return res.status(401).json({ error: "Session expired or invalid. Log in again." });
+    }
+    try {
+      const current = await getUserTokenVersion(payload.uid);
+      if (current === null || current !== payload.tv) {
+        return res.status(401).json({ error: "Session expired or invalid. Log in again." });
+      }
+    } catch (err) {
+      console.error("Session version check failed:", err.message);
+      return res.status(500).json({ error: "Could not verify session. Try again." });
     }
     if (!SAFE_METHODS.has(req.method)) {
       const origin = requestOrigin(req);

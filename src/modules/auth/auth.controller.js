@@ -70,7 +70,7 @@ async function signup(req, res) {
     // fresh signup is visible immediately regardless of a prior lookup,
     // rather than depending on the negative-cache TTL to expire first.
     invalidateTenantCache(subdomain);
-    const token = issueToken({ tenantId: tenant.id, subdomain: tenant.subdomain });
+    const token = issueToken({ tenantId: tenant.id, subdomain: tenant.subdomain, uid: tenant.userId, tv: tenant.tokenVersion ?? 0 });
     res
       .cookie("afrexpay_session", token, cookieOptions())
       .status(201)
@@ -105,7 +105,7 @@ async function login(req, res) {
     return res.status(401).json({ error: "Incorrect email or password." });
   }
 
-  const token = issueToken({ tenantId: session.tenantId, subdomain: session.subdomain });
+  const token = issueToken({ tenantId: session.tenantId, subdomain: session.subdomain, uid: session.userId, tv: session.tokenVersion ?? 0 });
   res
     .cookie("afrexpay_session", token, cookieOptions())
     .json({ subdomain: session.subdomain });

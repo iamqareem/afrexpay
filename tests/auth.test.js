@@ -20,6 +20,29 @@ function makeRes() {
   return res;
 }
 
+// authRequired is async (DB version check) — drive it to settlement and
+// report whether next() ran or which status was sent.
+const pool = require("../src/db/pool");
+async function runAuth(req) {
+  let nexted = false;
+  const res = makeRes();
+  await authRequired(req, res, () => { nexted = true; });
+  return { nexted, statusCode: res.statusCode, body: res.body, req };
+}
+
+// Stubs the token_version lookup by user id. Restores pool.query after.
+function stubTokenVersion(versionByUser) {
+  const original = pool.query;
+  pool.query = async (text, values) => {
+    if (/SELECT token_version FROM users/.test(text)) {
+      const v = versionByUser[values[0]];
+      return v === undefined ? { rows: [] } : { rows: [{ token_version: v }] };
+    }
+    return { rows: [] };
+  };
+  return () => { pool.query = original; };
+}
+
 test("issueToken/verifyToken round-trips the session payload", () => {
   const token = issueToken({ tenantId: "tenant-1", subdomain: "my-store" });
   const payload = verifyToken(token);
@@ -44,28 +67,62 @@ test("authRequired rejects requests without a session cookie", () => {
   assert.equal(nexted, false);
 });
 
-test("authRequired passes matching tenants and sets req.auth", () => {
-  const token = issueToken({ tenantId: "t1", subdomain: "s" });
-  const req = { cookies: { afrexpay_session: token }, tenant: { id: "t1" } };
-  const res = makeRes();
-  let nexted = false;
-  authRequired(req, res, () => { nexted = true; });
-  assert.equal(nexted, true);
-  assert.equal(req.auth.tenantId, "t1");
+test("authRequired passes matching tenants and sets req.auth", async () => {
+  const restore = stubTokenVersion({ u1: 0 });
+  try {
+    const token = issueToken({ tenantId: "t1", subdomain: "s", uid: "u1", tv: 0 });
+    const { nexted, req } = await runAuth({ cookies: { afrexpay_session: token }, tenant: { id: "t1" } });
+    assert.equal(nexted, true);
+    assert.equal(req.auth.tenantId, "t1");
+  } finally {
+    restore();
+  }
 });
 
-test("authRequired rejects cross-tenant sessions and bad tokens", () => {
-  const other = issueToken({ tenantId: "t2", subdomain: "other" });
-  const res1 = makeRes();
-  let nexted = false;
-  authRequired({ cookies: { afrexpay_session: other }, tenant: { id: "t1" } }, res1, () => { nexted = true; });
-  assert.equal(res1.statusCode, 403);
-  assert.equal(nexted, false);
+test("authRequired rejects cross-tenant sessions and bad tokens", async () => {
+  const other = issueToken({ tenantId: "t2", subdomain: "other", uid: "u2", tv: 0 });
+  const r1 = await runAuth({ cookies: { afrexpay_session: other }, tenant: { id: "t1" } });
+  assert.equal(r1.statusCode, 403);
+  assert.equal(r1.nexted, false);
 
-  const res2 = makeRes();
-  authRequired({ cookies: { afrexpay_session: "garbage" }, tenant: { id: "t1" } }, res2, () => { nexted = true; });
-  assert.equal(res2.statusCode, 401);
-  assert.equal(nexted, false);
+  const r2 = await runAuth({ cookies: { afrexpay_session: "garbage" }, tenant: { id: "t1" } });
+  assert.equal(r2.statusCode, 401);
+  assert.equal(r2.nexted, false);
+});
+
+test("authRequired rejects legacy tokens without a uid claim", async () => {
+  const token = issueToken({ tenantId: "t1", subdomain: "s" });
+  const r = await runAuth({ cookies: { afrexpay_session: token }, tenant: { id: "t1" } });
+  assert.equal(r.statusCode, 401);
+  assert.equal(r.nexted, false);
+});
+
+test("authRequired rejects sessions revoked by password reset (version bump)", async () => {
+  const restore = stubTokenVersion({ u1: 1 }); // reset bumped stored version to 1
+  try {
+    const stale = issueToken({ tenantId: "t1", subdomain: "s", uid: "u1", tv: 0 });
+    const r = await runAuth({ cookies: { afrexpay_session: stale }, tenant: { id: "t1" } });
+    assert.equal(r.statusCode, 401);
+    assert.equal(r.nexted, false);
+
+    const fresh = issueToken({ tenantId: "t1", subdomain: "s", uid: "u1", tv: 1 });
+    const r2 = await runAuth({ cookies: { afrexpay_session: fresh }, tenant: { id: "t1" } });
+    assert.equal(r2.nexted, true);
+  } finally {
+    restore();
+  }
+});
+
+test("authRequired rejects sessions for deleted users", async () => {
+  const restore = stubTokenVersion({}); // no row for anyone
+  try {
+    const token = issueToken({ tenantId: "t1", subdomain: "s", uid: "ghost", tv: 0 });
+    const r = await runAuth({ cookies: { afrexpay_session: token }, tenant: { id: "t1" } });
+    assert.equal(r.statusCode, 401);
+    assert.equal(r.nexted, false);
+  } finally {
+    restore();
+  }
 });
 
 test("SUBDOMAIN_RE allows lowercase/digits/hyphens, rejects the rest", () => {
