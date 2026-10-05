@@ -15,4 +15,15 @@ const publicWriteLimiter = rateLimit({
   message: { error: "Too many requests from this address. Try again in a few minutes." },
 });
 
-module.exports = { publicWriteLimiter };
+// Public slot picker: read-only but each call fans out to several queries
+// plus slot-loop CPU, so anonymous scraping/flooding gets its own budget
+// rather than sharing the write budget (or none at all).
+const slotsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests from this address. Try again in a few minutes." },
+});
+
+module.exports = { publicWriteLimiter, slotsLimiter };

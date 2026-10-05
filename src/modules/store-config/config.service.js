@@ -70,4 +70,20 @@ async function setThemeSlug(tenantId, themeSlug) {
   return rows[0];
 }
 
-module.exports = { getConfig, updateConfig, setThemeSlug, deepMergeConfig };
+// Sets matrixRoomId only when none is stored yet (first writer wins).
+// Returns { roomId, created }. Losers re-read the winner's room instead of
+// orphaning a second room — two concurrent first-connects used to each
+// create one and strand one.
+async function setMatrixRoomIfUnset(tenantId, roomId) {
+  const { rows } = await pool.query(
+    `UPDATE store_configs SET config = jsonb_set(config, '{matrixRoomId}', to_jsonb($2::text)), updated_at = now()
+     WHERE tenant_id = $1 AND (config->>'matrixRoomId' IS NULL)
+     RETURNING config->>'matrixRoomId' AS "matrixRoomId"`,
+    [tenantId, roomId]
+  );
+  if (rows[0]) return { roomId: rows[0].matrixRoomId, created: true };
+  const current = await getConfig(tenantId);
+  return { roomId: current.config?.matrixRoomId || null, created: false };
+}
+
+module.exports = { getConfig, updateConfig, setThemeSlug, deepMergeConfig, setMatrixRoomIfUnset };

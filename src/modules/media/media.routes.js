@@ -6,7 +6,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const authRequired = require("../../middleware/auth-required");
 const { MEDIA_DIR } = require("../../middleware/media-server");
-const { recordMedia, deleteMedia, setSortOrder, listMediaForEntity } = require("./media.service");
+const { recordMedia, deleteMedia, setSortOrders, listMediaForEntity } = require("./media.service");
 const { getProduct } = require("../products/product.service");
 const { getListing } = require("../listings/listing.service");
 const { getService } = require("../services/service.service");
@@ -101,10 +101,14 @@ router.post("/", authRequired, (req, res) => {
       // Verify the file's actual bytes match its claimed type before doing
       // anything else with it — the fileFilter check above only looked at
       // the client-supplied header, which proves nothing on its own.
+      // try/finally: a readSync throw used to leak the fd and 500.
       const fd = fs.openSync(req.file.path, "r");
       const headerBuf = Buffer.alloc(12);
-      fs.readSync(fd, headerBuf, 0, 12, 0);
-      fs.closeSync(fd);
+      try {
+        fs.readSync(fd, headerBuf, 0, 12, 0);
+      } finally {
+        fs.closeSync(fd);
+      }
 
       if (!matchesMagicNumber(headerBuf, req.file.mimetype)) {
         fs.unlinkSync(req.file.path);
@@ -184,21 +188,34 @@ router.delete("/:id", authRequired, async (req, res) => {
 // sort_order). Full replace rather than incremental patch, same reasoning
 // as availability windows — reordering is one mental action, not N
 // separate edits.
+const MAX_ORDER_IDS = 200;
+
 router.put("/order", authRequired, async (req, res) => {
   const { mediaIds } = req.body || {};
   if (!Array.isArray(mediaIds) || mediaIds.some((id) => !UUID_RE.test(id))) {
     return res.status(400).json({ error: "mediaIds must be an array of valid media ids." });
   }
-  for (let i = 0; i < mediaIds.length; i++) {
-    await setSortOrder(req.tenant.id, mediaIds[i], i);
+  if (mediaIds.length > MAX_ORDER_IDS) {
+    return res.status(400).json({ error: `mediaIds must have at most ${MAX_ORDER_IDS} entries.` });
   }
-  res.json({ ok: true });
+  // One atomic statement (see setSortOrders) — and strict about membership:
+  // foreign/nonexistent ids no longer silently "succeed" as { ok: true }.
+  const matched = await setSortOrders(req.tenant.id, mediaIds);
+  if (matched.length !== mediaIds.length) {
+    return res.status(400).json({ error: "Some photos were not found for this store." });
+  }
+  res.json({ ok: true, updated: matched.length });
 });
 
 // Public — every storefront theme fetches an entity's photos this same way,
 // whatever vertical it's for. No separate "get the product image" endpoint.
 router.get("/for/:entityType/:entityId", async (req, res) => {
   const { entityType, entityId } = req.params;
+  // Same whitelist as upload: arbitrary entityType strings have no
+  // business reaching the query, even tenant-scoped.
+  if (!ENTITY_OWNERSHIP_CHECKS[entityType]) {
+    return res.status(400).json({ error: `Unknown entity type. Choose one of: ${Object.keys(ENTITY_OWNERSHIP_CHECKS).join(", ")}` });
+  }
   if (!UUID_RE.test(entityId)) {
     return res.status(400).json({ error: "Invalid entity id." });
   }

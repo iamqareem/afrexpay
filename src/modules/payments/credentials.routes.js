@@ -32,6 +32,18 @@ router.put("/:provider", authRequired, async (req, res) => {
   if (mode !== undefined && !["test", "live"].includes(mode)) {
     return res.status(400).json({ error: "mode must be 'test' or 'live'." });
   }
+  if (enabled !== undefined && typeof enabled !== "boolean") {
+    return res.status(400).json({ error: "enabled must be a boolean." });
+  }
+  // Enabling with no secret anywhere (not in the request, not stored)
+  // used to succeed and toast "connected" while no pay button could ever
+  // appear (payment-methods requires enabled AND a stored secret).
+  if (enabled === true && !secretKey) {
+    const summary = await getCredentialsSummary(req.tenant.id, req.params.provider);
+    if (!summary?.has_secret_key) {
+      return res.status(400).json({ error: "A secret key is required before enabling this provider." });
+    }
+  }
   const updated = await upsertCredentials(req.tenant.id, req.params.provider, {
     secretKey, publishableKey, webhookSecret, mode, enabled,
   });

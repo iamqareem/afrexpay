@@ -68,9 +68,12 @@ async function deleteResource(tenantId, resourceId) {
       await client.query("ROLLBACK");
       return null;
     }
+    // Only live bookings block the delete — completed history must not
+    // hold a resource hostage forever. The message promises "upcoming",
+    // so the query checks exactly that (pending/confirmed), not all time.
     const refs = await client.query(
       `SELECT COUNT(*)::int AS n FROM bookings
-       WHERE tenant_id = $1 AND resource_id = $2 AND status != 'cancelled'`,
+       WHERE tenant_id = $1 AND resource_id = $2 AND status IN ('pending', 'confirmed')`,
       [tenantId, resourceId]
     );
     if (refs.rows[0].n > 0) {

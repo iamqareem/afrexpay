@@ -194,17 +194,19 @@ async function handleBookingSubmit(e) {
 // flips payment_status).
 async function showConfirm(bookingId) {
   state.lastBookingId = bookingId;
+  let data = null;
+  try {
+    const res = await fetch(`/api/bookings/${bookingId}/status`);
+    if (res.ok) data = await res.json();
+    else if (res.status === 404) return; // forged ?booking= id — leave the picker up
+  } catch {
+    data = null;
+  }
   document.getElementById("step-service").classList.add("hidden");
   document.getElementById("step-slots").classList.add("hidden");
   document.getElementById("step-details").classList.add("hidden");
   document.getElementById("step-confirm").classList.remove("hidden");
-  let paid = false;
-  try {
-    const res = await fetch(`/api/bookings/${bookingId}/status`);
-    if (res.ok) paid = (await res.json()).payment_status === "paid";
-  } catch {
-    paid = false;
-  }
+  const paid = !!data && data.payment_status === "paid";
   document.getElementById("confirm-paid").classList.toggle("hidden", !paid);
   const slot = document.getElementById("pay-now-slot");
   slot.classList.toggle("hidden", !!paid);

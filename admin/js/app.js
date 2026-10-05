@@ -183,7 +183,10 @@ function adminApp() {
     },
 
     async checkSession() {
-      const res = await fetch("/api/orders", { credentials: "same-origin" });
+      // Session probe only — no data. (A full /api/orders pull used to run
+      // here, then run again inside loadAll, coupling login state to a
+      // data endpoint's health.)
+      const res = await fetch("/api/auth/session", { credentials: "same-origin" });
       this.loggedIn = res.ok;
       this.checkedSession = true;
       if (!this.loggedIn) return;
@@ -282,6 +285,11 @@ function adminApp() {
       this.loginPassword = "";
       this.showLoginPassword = false;
       await this.loadAll();
+      // Same guard as checkSession: a pre-login #tab= bookmark for a
+      // vertical this store doesn't have must not strand the dashboard.
+      if (!["home", "config", "payments", "domain"].includes(this.tab) && !this.tabVisible(this.tab)) {
+        this.tab = "home";
+      }
     },
 
     async logout() {
@@ -1233,7 +1241,7 @@ function adminApp() {
           credentials: "same-origin",
           body: JSON.stringify({ status }),
         });
-        if (!res.ok) throw new Error("Could not update booking.");
+        if (!res.ok) throw new Error((await res.json()).error || "Could not update booking.");
         this.showToast("Booking updated.");
       } catch (err) {
         if (b) b.status = prev;

@@ -152,6 +152,9 @@ async function handleBookingSubmit(e) {
   const errorEl = document.getElementById("booking-error");
   errorEl.classList.add("hidden");
 
+  // Only a 409 means "someone else took the slot" — other failures
+  // (validation, closed day, network) must keep the valid selection.
+  let failedStatus = 0;
   try {
     const res = await fetch("/api/bookings", {
       method: "POST",
@@ -166,7 +169,10 @@ async function handleBookingSubmit(e) {
       }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Could not book that slot.");
+    if (!res.ok) {
+      failedStatus = res.status;
+      throw new Error(data.error || "Could not book that slot.");
+    }
 
     showConfirm(data.id);
   } catch (err) {
@@ -175,7 +181,7 @@ async function handleBookingSubmit(e) {
     // now-stale option disappears, rather than leaving a dead button up.
     errorEl.textContent = err.message;
     errorEl.classList.remove("hidden");
-    loadSlots();
+    if (failedStatus === 409) loadSlots();
   }
 }
 
@@ -185,17 +191,19 @@ async function handleBookingSubmit(e) {
 // flips payment_status).
 async function showConfirm(bookingId) {
   state.lastBookingId = bookingId;
+  let data = null;
+  try {
+    const res = await fetch(`/api/bookings/${bookingId}/status`);
+    if (res.ok) data = await res.json();
+    else if (res.status === 404) return; // forged ?booking= id — leave the picker up
+  } catch {
+    data = null;
+  }
   document.getElementById("step-service").classList.add("hidden");
   document.getElementById("step-slots").classList.add("hidden");
   document.getElementById("step-details").classList.add("hidden");
   document.getElementById("step-confirm").classList.remove("hidden");
-  let paid = false;
-  try {
-    const res = await fetch(`/api/bookings/${bookingId}/status`);
-    if (res.ok) paid = (await res.json()).payment_status === "paid";
-  } catch {
-    paid = false;
-  }
+  const paid = !!data && data.payment_status === "paid";
   document.getElementById("confirm-paid").classList.toggle("hidden", !paid);
   const slot = document.getElementById("pay-now-slot");
   slot.classList.toggle("hidden", !!paid);

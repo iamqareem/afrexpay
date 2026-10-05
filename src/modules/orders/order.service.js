@@ -63,6 +63,17 @@ async function createOrder(tenantId, { customerName, phone, address, deliveryNot
       totalMinor += product.price_minor * qty;
     }
 
+    // Totals are a sum in ONE currency — mixing UGX lines with USD lines
+    // would record nonsense (1010 UGX for "1000 UGX + 10 USD") and charge
+    // it. Reject mixed carts outright; the storefront sells per-currency.
+    const currencies = new Set(resolvedItems.map((i) => i.currency));
+    if (currencies.size > 1) {
+      throw Object.assign(
+        new Error("All items in one order must share the same currency."),
+        { status: 400 }
+      );
+    }
+
     const orderResult = await client.query(
       `INSERT INTO orders (tenant_id, customer_name, phone, address, delivery_notes, total_minor, currency)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, created_at`,

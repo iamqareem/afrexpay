@@ -224,13 +224,17 @@ async function openConfirm(orderId) {
   // Never trust the ?paid=1 query param (anyone can forge a query string)
   // — ask the server for the order's real payment_status. Unreachable or
   // unpaid both render the pay-now path, never the paid banner.
-  let paid = false;
+  // 404 here means a forged ?order= id — open nothing at all. A network
+  // failure still renders the pay-now path (safe default), never paid.
+  let data = null;
   try {
     const res = await fetch(`/api/orders/${orderId}/status`);
-    if (res.ok) paid = (await res.json()).payment_status === "paid";
+    if (res.ok) data = await res.json();
+    else if (res.status === 404) return;
   } catch {
-    paid = false;
+    data = null;
   }
+  const paid = !!data && data.payment_status === "paid";
   // The paid banner reflects the webhook-set payment_status above, never
   // the client-side redirect that brought the buyer here.
   document.getElementById("confirm-paid").classList.toggle("hidden", !paid);

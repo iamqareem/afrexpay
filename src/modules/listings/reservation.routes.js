@@ -58,7 +58,11 @@ router.post("/:id/checkout", publicWriteLimiter, async (req, res) => {
 });
 
 router.get("/", authRequired, async (req, res) => {
-  res.json(await listReservations(req.tenant.id, req.query));
+  try {
+    res.json(await listReservations(req.tenant.id, req.query));
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.status ? err.message : "Could not load reservations." });
+  }
 });
 
 module.exports = router;

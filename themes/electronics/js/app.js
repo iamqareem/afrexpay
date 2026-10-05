@@ -654,7 +654,8 @@ class TechCheckout extends HTMLElement {
         .then((res) => (res.ok ? res.json() : null))
         .catch(() => null)
         .then((data) => {
-          store.set('confirmedOrderPaid', data?.payment_status === "paid");
+          if (!data) return; // forged ?order= id — open nothing at all
+          store.set('confirmedOrderPaid', data.payment_status === "paid");
           store.set('confirmedOrderId', returnOrderId);
         });
     }

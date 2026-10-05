@@ -2,6 +2,7 @@
 const express = require("express");
 const authRequired = require("../../middleware/auth-required");
 const { listResources, createResource, deleteResource } = require("./resource.service");
+const { UUID_RE } = require("../../lib/validate");
 
 const router = express.Router();
 
@@ -15,6 +16,9 @@ router.post("/", authRequired, async (req, res) => {
   if (!name || !serviceId) {
     return res.status(400).json({ error: "name and serviceId are required." });
   }
+  if (!UUID_RE.test(serviceId)) {
+    return res.status(400).json({ error: "Invalid serviceId." });
+  }
   try {
     const resource = await createResource(req.tenant.id, { name, serviceId });
     res.status(201).json(resource);
@@ -24,6 +28,9 @@ router.post("/", authRequired, async (req, res) => {
 });
 
 router.delete("/:id", authRequired, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(404).json({ error: "Resource not found." });
+  }
   try {
     const deleted = await deleteResource(req.tenant.id, req.params.id);
     if (!deleted) return res.status(404).json({ error: "Resource not found." });

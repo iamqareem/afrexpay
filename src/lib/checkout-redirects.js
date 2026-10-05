@@ -7,11 +7,16 @@
 // shopper lands on a phishing page. These must point back at the store
 // being paid (its subdomain, its verified custom domain, or the platform
 // site itself), never at an arbitrary host.
-const BASE_DOMAIN = (process.env.BASE_DOMAIN || "afrexpay.com").toLowerCase();
+
+
+function baseDomain() {
+  return (process.env.BASE_DOMAIN || "afrexpay.com").toLowerCase();
+}
 
 function tenantHosts(tenant) {
-  const hosts = new Set([BASE_DOMAIN, `www.${BASE_DOMAIN}`]);
-  if (tenant?.subdomain) hosts.add(`${String(tenant.subdomain).toLowerCase()}.${BASE_DOMAIN}`);
+  const base = baseDomain();
+  const hosts = new Set([base, `www.${base}`]);
+  if (tenant?.subdomain) hosts.add(`${String(tenant.subdomain).toLowerCase()}.${baseDomain()}`);
   if (tenant?.custom_domain) hosts.add(String(tenant.custom_domain).toLowerCase());
   return hosts;
 }

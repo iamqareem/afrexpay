@@ -97,7 +97,7 @@ async function markReservationPaid(tenantId, sessionId, amountMinor, currency, p
            SELECT entity_id FROM checkout_sessions
            WHERE provider = $3 AND session_id = $2 AND tenant_id = $1 AND entity_type = 'listing_reservation'
          ))
-       RETURNING id, listing_id, name, phone`,
+       RETURNING id, listing_id, name, phone, deposit_amount_minor, currency`,
       [tenantId, sessionId, provider]
     );
     const reservation = rows[0];
@@ -109,13 +109,13 @@ async function markReservationPaid(tenantId, sessionId, amountMinor, currency, p
       return null;
     }
 
-    // Fetch expected deposit for amount guard (reservation row has listing_id)
-    const listingRows = await client.query(
-      `SELECT deposit_amount_minor, currency FROM listings WHERE tenant_id = $1 AND id = $2`,
-      [tenantId, reservation.listing_id]
-    );
-    const expectedAmount = listingRows.rows[0]?.deposit_amount_minor;
-    const expectedCurrency = listingRows.rows[0]?.currency;
+    // Amount guard reads the RESERVATION snapshot (deposit locked at
+    // reservation time), not the live listing row: a merchant editing the
+    // deposit mid-flight must not turn a correct payment "underpaid", and
+    // a deleted listing must not disable the guard entirely (the old
+    // `expectedAmount &&` clause did exactly that for missing rows).
+    const expectedAmount = reservation.deposit_amount_minor;
+    const expectedCurrency = reservation.currency;
     if (!amountMinor || (expectedAmount && amountMinor !== expectedAmount)) {
       await client.query("ROLLBACK");
       console.error(`Reservation ${reservation.id} underpaid: expected ${expectedAmount} ${expectedCurrency}, got ${amountMinor} ${currency}`);
@@ -173,10 +173,22 @@ async function getReservationPaymentStatus(tenantId, reservationId) {
   return rows[0] || null;
 }
 
+const RESERVATION_PAYMENT_STATUSES = ["pending", "paid", "failed", "refunded"];
+
 async function listReservations(tenantId, params = {}) {
-  const { search, limit, offset, dir } = parseListParams(params);
+  const { search, status, limit, offset, dir } = parseListParams(params);
   const conditions = [`r.tenant_id = $1`];
   const values = [tenantId];
+  if (status) {
+    if (!RESERVATION_PAYMENT_STATUSES.includes(status)) {
+      throw Object.assign(
+        new Error(`status must be one of: ${RESERVATION_PAYMENT_STATUSES.join(", ")}.`),
+        { status: 400 }
+      );
+    }
+    values.push(status);
+    conditions.push(`r.payment_status = $${values.length}`);
+  }
   if (search) conditions.push(searchCondition(values, ["r.name", "r.phone", "l.title"], search));
   values.push(limit, offset);
   const { rows } = await pool.query(

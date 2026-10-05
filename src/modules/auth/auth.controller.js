@@ -36,6 +36,23 @@ function cookieOptions() {
   return opts;
 }
 
+const { verifyToken } = require("./auth.service");
+
+async function sessionStatus(req, res) {
+  // Lightweight auth probe for the admin boot: verifies the cookie only,
+  // no tenant lookup, no data queries. The old probe (GET /api/orders)
+  // pulled the whole orders table just to read res.ok — and a 500 from
+  // that data endpoint showed the login screen despite a valid session.
+  const token = req.cookies?.afrexpay_session;
+  if (!token) return res.status(401).json({ error: "Not logged in." });
+  try {
+    const payload = verifyToken(token);
+    res.json({ tenantId: payload.tenantId, subdomain: payload.subdomain });
+  } catch {
+    res.status(401).json({ error: "Session expired or invalid. Log in again." });
+  }
+}
+
 const { VALID_VERTICALS, isThemeCompatible } = require("../../verticals");
 const { validatePassword } = require("../../lib/password-validator");
 
@@ -173,4 +190,4 @@ async function resetPassword(req, res) {
   res.json({ message: "Password updated. You can now log in." });
 }
 
-module.exports = { signup, login, logout, requestPasswordReset, resetPassword, SUBDOMAIN_RE, RESERVED_SUBDOMAINS, cookieOptions };
+module.exports = { signup, login, logout, requestPasswordReset, resetPassword, sessionStatus, SUBDOMAIN_RE, RESERVED_SUBDOMAINS, cookieOptions };

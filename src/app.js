@@ -80,10 +80,13 @@ app.get("/js/afrexpay-checkout.js", (req, res) => {
 // Requests to the bare base domain (afrexpay.com, no subdomain) get the
 // marketing/signup site, not a tenant storefront — checked before tenant
 // resolution so it never gets caught by the "no store found" 404 below.
+// Instantiated once: the old per-request express.static() churned a
+// handler object on every base-domain hit for no reason.
+const baseStatic = express.static(path.join(__dirname, "..", "public"));
 app.use((req, res, next) => {
   const subdomain = extractSubdomain(req.headers.host);
   if (subdomain === null && !req.path.startsWith("/api")) {
-    return express.static(path.join(__dirname, "..", "public"))(req, res, next);
+    return baseStatic(req, res, next);
   }
   next();
 });
@@ -123,11 +126,19 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, tenant: req.tenant.subdomain });
 });
 
-// Tenant-scoped product photos.
+// Tenant-scoped product photos. The JSON 404 keeps /media misses in the
+// API's error shape — without it they fall through to Express's default
+// HTML 404 (the storefront catch-all below deliberately excludes /media).
 app.use("/media", serveMedia);
+app.use("/media", (req, res) => {
+  res.status(404).json({ error: "Media not found." });
+});
 
 // Everything else is the public storefront — theme picked per tenant.
-app.get(/^(?!\/api|\/admin|\/media).*/, serveStorefront);
+// Segment-anchored: the old prefix negative-lookahead also swallowed
+// legitimate slugs like /apiary, /administrator-sale and /media-kit (they
+// fell through to a 404 instead of the storefront).
+app.get(/^(?!\/api(\/|$)|\/admin(\/|$)|\/media(\/|$)).*/, serveStorefront);
 
 // Centralized error handler — must be last. Catches anything a route didn't
 // handle itself (Express 5 forwards rejected async handlers here

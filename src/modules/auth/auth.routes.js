@@ -52,6 +52,7 @@ router.get("/themes", (req, res) => {
 router.post("/signup", signupLimiter, controller.signup);
 router.post("/login", loginLimiter, controller.login);
 router.post("/logout", controller.logout);
+router.get("/session", controller.sessionStatus);
 router.post("/request-password-reset", resetRequestLimiter, controller.requestPasswordReset);
 router.post("/reset-password", resetRequestLimiter, controller.resetPassword);
 

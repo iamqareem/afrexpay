@@ -6,6 +6,7 @@ const { createBooking, listBookings, getBookingPaymentStatus, updateBookingStatu
 const { getConfig } = require("../store-config/config.service");
 const { notifyNewOrder } = require("../notify-matrix/matrix.service");
 const { assertSafeCheckoutRedirects } = require("../../lib/checkout-redirects");
+const { UUID_RE } = require("../../lib/validate");
 
 const router = express.Router();
 
@@ -74,6 +75,9 @@ router.get("/", authRequired, async (req, res) => {
 });
 
 router.patch("/:id", authRequired, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(404).json({ error: "Booking not found." });
+  }
   const { status } = req.body || {};
   if (!BOOKING_STATUSES.includes(status)) {
     return res.status(400).json({ error: `status must be one of: ${BOOKING_STATUSES.join(", ")}.` });

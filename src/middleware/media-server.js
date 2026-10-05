@@ -8,11 +8,17 @@ const path = require("node:path");
 
 const MEDIA_DIR = path.join(__dirname, "..", "..", "data", "media");
 
+// Bounded like the tenant cache: one static handler per tenant, oldest
+// evicted past the cap so tenant churn can't grow this forever.
+const MAX_CACHED_HANDLERS = 500;
 const handlerCache = new Map();
 
 function getHandler(tenantId) {
   if (handlerCache.has(tenantId)) return handlerCache.get(tenantId);
   const handler = express.static(path.join(MEDIA_DIR, tenantId));
+  if (handlerCache.size >= MAX_CACHED_HANDLERS) {
+    handlerCache.delete(handlerCache.keys().next().value);
+  }
   handlerCache.set(tenantId, handler);
   return handler;
 }
