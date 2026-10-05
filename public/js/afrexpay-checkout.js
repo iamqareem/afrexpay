@@ -12,79 +12,9 @@
 
   var LABELS = { stripe: "Pay by card", paypal: "Pay with PayPal" };
 
-  // Function to get available payment methods
-  function getAvailableMethods() {
-    return fetch("/api/config/payment-methods", { credentials: "same-origin" })
-      .then(function (res) { return res.json(); })
-      .catch(function () { return {}; });
-  }
-
-  // Function to start checkout with the selected provider
-  function startCheckout(entityType, entityId, provider, btn, errEl) {
-    var ep = endpointFor(entityType);
-    var urls = returnUrls(entityType, entityId);
-    if (!ep || !urls) return Promise.reject(new Error("Unknown entity type."));
-    errEl.style.display = "none";
-    btn.disabled = true;
-    btn.textContent = "Redirecting…";
-    return fetch(ep.path + "/" + encodeURIComponent(entityId) + "/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ successUrl: urls.successUrl, cancelUrl: urls.cancelUrl, provider: provider }),
-    })
-      .then(function (res) { return res.json().then(function (data) { return { res: res, data: data }; }); })
-      .then(function (out) {
-        if (!out.res.ok) throw new Error(out.data.error || "Could not start checkout.");
-        window.location.href = out.data.checkoutUrl;
-      })
-      .catch(function (err) {
-        errEl.textContent = err.message;
-        errEl.style.display = "";
-        btn.disabled = false;
-        btn.textContent = LABELS[provider] || "Pay now";
-      });
-  }
-
-  // Function to render the checkout modal
-  function render(el, opts) {
-    opts = opts || {};
-    var entityType = opts.entityType;
-    var entityId = opts.entityId;
-    var onError = opts.onError || function () {};
-    if (!el || !endpointFor(entityType) || !entityId) {
-      onError(new Error("AfrexpayCheckout.render needs el, entityType, entityId."));
-      return;
-    }
-    el.innerHTML = '<p style="opacity:.7;font-size:.9rem">Loading payment options…</p>';
-    getAvailableMethods().then(function (m) {
-      var available = ["stripe", "paypal"].filter(function (p) { return m && m[p]; });
-      if (available.length === 0) {
-        el.innerHTML = '<p style="opacity:.7;font-size:.9rem">Online payment is not available for this store right now.</p>';
-        return;
-      }
-      var html = available.map(function (p) {
-        var dark = p === "stripe";
-        return '<button type="button" data-provider="' + p + '" style="' + BTN +
-          (dark ? "background:#000;color:#fff;" : "background:#fff;color:#000;") + '">' +
-          esc(LABELS[p]) + "</button>";
-      }).join("") + '<p data-apc-err style="display:none;color:#b00020;font-size:.85rem"></p>';
-      el.innerHTML = html;
-      var errEl = el.querySelector("[data-apc-err]");
-      el.querySelectorAll("[data-provider]").forEach(function (btn) {
-        btn.addEventListener("click", function () {
-          startCheckout(entityType, entityId, btn.getAttribute("data-provider"), btn, errEl).catch(onError);
-        });
-      });
-    }).catch(function (err) {
-      el.innerHTML = '<p style="opacity:.7;font-size:.9rem">Online payment is not available for this store right now.</p>';
-      onError(err);
-    });
-  }
-
-  var api = { render: render, methods: getAvailableMethods, endpointFor: endpointFor, returnUrls: returnUrls };
-  global.AfrexpayCheckout = api;
-  if (typeof module !== "undefined" && module.exports) module.exports = api;
-
+  // Single implementation of each function below — an earlier revision
+  // duplicated getAvailableMethods/startCheckout/render (second copies
+  // silently won), so any fix to the first set was dead code.
   var BTN =
     "display:block;width:100%;margin:0 0 .6rem;padding:.8rem 1rem;" +
     "font:inherit;font-weight:700;border-radius:999px;cursor:pointer;" +

@@ -15,6 +15,9 @@ router.post("/", publicWriteLimiter, async (req, res) => {
   if (!customerName || !phone || !address || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "customerName, phone, address, and at least one item are required." });
   }
+  if (items.some((i) => !i || !UUID_RE.test(i.productId))) {
+    return res.status(400).json({ error: "Every item needs a valid productId." });
+  }
   try {
     const order = await createOrder(req.tenant.id, req.body);
     res.status(201).json(order);

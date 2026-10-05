@@ -11,9 +11,16 @@ const { UUID_RE } = require("../../lib/validate");
 const router = express.Router();
 
 router.post("/", publicWriteLimiter, async (req, res) => {
-  const { serviceId, customerName, phone, startTime } = req.body || {};
+  const { serviceId, customerName, phone, startTime, resourceId } = req.body || {};
   if (!serviceId || !customerName || !phone || !startTime) {
     return res.status(400).json({ error: "serviceId, customerName, phone, and startTime are required." });
+  }
+  // Malformed ids hit UUID columns as PG 22P02 500s — reject as 400s first.
+  if (!UUID_RE.test(serviceId)) {
+    return res.status(400).json({ error: "Invalid serviceId." });
+  }
+  if (resourceId && !UUID_RE.test(resourceId)) {
+    return res.status(400).json({ error: "Invalid resourceId." });
   }
   try {
     const booking = await createBooking(req.tenant.id, req.body);

@@ -38,6 +38,7 @@ function stubTokenVersion(versionByUser) {
       const v = versionByUser[values[0]];
       return v === undefined ? { rows: [] } : { rows: [{ token_version: v }] };
     }
+    // Revocation lookup and everything else: empty (not revoked).
     return { rows: [] };
   };
   return () => { pool.query = original; };
@@ -168,7 +169,7 @@ test("sessionStatus enforces uid + live version like data endpoints", async () =
     return { code, body };
   };
   const original = pool.query;
-  pool.query = async () => ({ rows: [{ token_version: 2 }] });
+  pool.query = async (text) => (/SELECT token_version FROM users/.test(text) ? { rows: [{ token_version: 2 }] } : { rows: [] });
   try {
     // Fresh session passes with tenant identity.
     const fresh = issueToken({ tenantId: "t1", subdomain: "s", uid: "u1", tv: 2 });

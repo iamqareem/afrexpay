@@ -3,6 +3,7 @@ const express = require("express");
 const authRequired = require("../../middleware/auth-required");
 const { publicWriteLimiter } = require("../../middleware/rate-limits");
 const { createInquiry, listInquiries } = require("./inquiry.service");
+const { UUID_RE } = require("../../lib/validate");
 const { getConfig } = require("../store-config/config.service");
 const { notifyNewOrder } = require("../notify-matrix/matrix.service");
 
@@ -12,6 +13,9 @@ router.post("/", publicWriteLimiter, async (req, res) => {
   const { listingId, name, phone } = req.body || {};
   if (!listingId || !name || !phone) {
     return res.status(400).json({ error: "listingId, name, and phone are required." });
+  }
+  if (!UUID_RE.test(listingId)) {
+    return res.status(400).json({ error: "Invalid listingId." });
   }
   try {
     const inquiry = await createInquiry(req.tenant.id, req.body);

@@ -16,6 +16,9 @@ router.post("/", publicWriteLimiter, async (req, res) => {
   if (!listingId || !name || !phone) {
     return res.status(400).json({ error: "listingId, name, and phone are required." });
   }
+  if (!UUID_RE.test(listingId)) {
+    return res.status(400).json({ error: "Invalid listingId." });
+  }
   try {
     const reservation = await createReservation(req.tenant.id, req.body);
     res.status(201).json(reservation);

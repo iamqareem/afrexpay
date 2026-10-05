@@ -39,7 +39,7 @@ function cookieOptions() {
   return opts;
 }
 
-const { verifyToken, getUserTokenVersion } = require("./auth.service");
+const { verifyToken, getUserTokenVersion, isTokenRevoked, revokeToken } = require("./auth.service");
 
 async function sessionStatus(req, res) {
   // Lightweight auth probe for the admin boot: no tenant lookup, no data
@@ -51,11 +51,14 @@ async function sessionStatus(req, res) {
   if (!token) return res.status(401).json({ error: "Not logged in." });
   try {
     const payload = verifyToken(token);
-    if (!payload.uid) {
+    if (!payload.uid || !payload.jti) {
       return res.status(401).json({ error: "Session expired or invalid. Log in again." });
     }
     const current = await getUserTokenVersion(payload.uid);
     if (current === null || current !== payload.tv) {
+      return res.status(401).json({ error: "Session expired or invalid. Log in again." });
+    }
+    if (await isTokenRevoked(payload.jti)) {
       return res.status(401).json({ error: "Session expired or invalid. Log in again." });
     }
     res.json({ tenantId: payload.tenantId, subdomain: payload.subdomain });
@@ -146,7 +149,21 @@ async function login(req, res) {
     .json({ subdomain: session.subdomain });
 }
 
-function logout(req, res) {
+async function logout(req, res) {
+  // Per-device logout: revoke this session id so the token dies now, not
+  // at its 7-day expiry. Other devices (other jtis) are untouched. The
+  // cookie is cleared regardless — even a garbage token must not linger.
+  try {
+    const token = req.cookies?.afrexpay_session;
+    if (token) {
+      const payload = verifyToken(token);
+      if (payload?.uid && payload?.jti) {
+        await revokeToken(payload.jti, payload.uid, payload.exp ? payload.exp * 1000 : Date.now());
+      }
+    }
+  } catch {
+    // Unverifiable token: nothing to revoke, still clear the cookie below.
+  }
   const opts = cookieOptions();
   // clearCookie must use the same path/domain/sameSite/secure as the
   // original set, otherwise the browser keeps the stale cookie and the

@@ -64,7 +64,9 @@ async function verifyLogin({ email, password }) {
 }
 
 function issueToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: TOKEN_TTL });
+  // jti = this specific session (device). Logout revokes exactly this id
+  // while sibling sessions keep working — see revokeToken below.
+  return jwt.sign({ ...payload, jti: crypto.randomUUID() }, JWT_SECRET, { expiresIn: TOKEN_TTL });
 }
 
 function verifyToken(token) {
@@ -138,6 +140,28 @@ async function resetPasswordWithToken(rawToken, newPassword) {
 
 // Null when the user is gone — also a revocation (deleted users keep
 // no valid sessions).
+// Records one session id as dead. Carries the token's own expiry and
+// reaps already-dead rows on the way, so the table stays tiny without a
+// separate sweeper. Concurrent logouts of the same session are a harmless
+// no-op (ON CONFLICT DO NOTHING).
+async function revokeToken(jti, userId, expiresAtMs) {
+  if (!jti || !userId) return false;
+  const expiresAt = new Date(Number(expiresAtMs) > 0 ? Number(expiresAtMs) : Date.now());
+  await pool.query(`DELETE FROM revoked_tokens WHERE expires_at <= now()`);
+  const { rows } = await pool.query(
+    `INSERT INTO revoked_tokens (jti, user_id, expires_at) VALUES ($1, $2, $3)
+     ON CONFLICT (jti) DO NOTHING RETURNING jti`,
+    [jti, userId, expiresAt]
+  );
+  return rows.length > 0;
+}
+
+async function isTokenRevoked(jti) {
+  if (!jti) return false;
+  const { rows } = await pool.query(`SELECT 1 FROM revoked_tokens WHERE jti = $1`, [jti]);
+  return rows.length > 0;
+}
+
 async function getUserTokenVersion(userId) {
   if (!userId) return null;
   const { rows } = await pool.query(`SELECT token_version FROM users WHERE id = $1`, [userId]);
@@ -145,6 +169,6 @@ async function getUserTokenVersion(userId) {
 }
 
 module.exports = {
-  createTenantWithOwner, verifyLogin, issueToken, verifyToken, getUserTokenVersion,
+  createTenantWithOwner, verifyLogin, issueToken, verifyToken, getUserTokenVersion, revokeToken, isTokenRevoked,
   createPasswordResetToken, resetPasswordWithToken,
 };

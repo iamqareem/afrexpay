@@ -13,6 +13,16 @@ function themeSrc(relative) {
   return fs.readFileSync(path.join(__dirname, "..", relative), "utf8");
 }
 
+test("shared checkout component defines each function exactly once", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const src = fs.readFileSync(path.join(__dirname, "..", "public/js/afrexpay-checkout.js"), "utf8");
+  for (const fn of ["function startCheckout", "function render("]) {
+    assert.strictEqual(src.split(fn).length - 1, 1, `${fn} must exist exactly once`);
+  }
+  assert.ok(!src.includes("function getAvailableMethods"), "dead first-copy definition must be gone");
+});
+
 test("no theme trusts ?paid=1 for the paid banner", () => {
   const files = [
     "themes/hangtag/js/app.js",

@@ -60,7 +60,7 @@ test("authRequired refuses cross-origin mutations but allows reads and headerles
   const tenantRow = { id: "tenant-1", subdomain: "glow-salon", custom_domain: null, custom_domain_verified_at: null };
   const token = issueToken({ tenantId: "tenant-1", subdomain: "glow-salon", uid: "u9", tv: 3 });
   const originalQuery = pool.query;
-  pool.query = async () => ({ rows: [{ token_version: 3 }] });
+  pool.query = async (text) => (/SELECT token_version FROM users/.test(text) ? { rows: [{ token_version: 3 }] } : { rows: [] });
   try {
 
   const run = (method, headers) =>

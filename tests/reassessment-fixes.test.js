@@ -139,7 +139,7 @@ test("listReservations filters by payment status and rejects unknown ones", asyn
 
 test("sessionStatus verifies a live session with no tenant lookup", async () => {
   const original = pool.query;
-  pool.query = async () => ({ rows: [{ token_version: 0 }] });
+  pool.query = async (text) => (/SELECT token_version FROM users/.test(text) ? { rows: [{ token_version: 0 }] } : { rows: [] });
   try {
     const token = issueToken({ tenantId: "t1", subdomain: "s", uid: "u1", tv: 0 });
     let body;
