@@ -4,6 +4,9 @@ const { sendResetEmail } = require("./reset-email");
 const { invalidateTenantCache, extractSubdomain } = require("../../middleware/tenant-resolver");
 
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$/;
+// Pragmatic format check (not RFC-complete on purpose): catches typos and
+// junk like "foo" while never rejecting a real address.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const BASE_DOMAIN = process.env.BASE_DOMAIN || "afrexpay.com";
 
 // Words that would collide with the platform itself, look official, or are
@@ -65,10 +68,17 @@ const { VALID_VERTICALS, isThemeCompatible } = require("../../verticals");
 const { validatePassword } = require("../../lib/password-validator");
 
 async function signup(req, res) {
-  const { businessName, subdomain, email, password, vertical, themeSlug } = req.body || {};
+  let { businessName, subdomain, email, password, vertical, themeSlug } = req.body || {};
 
   if (!businessName || !subdomain || !email || !password) {
     return res.status(400).json({ error: "businessName, subdomain, email, and password are required." });
+  }
+  // Canonical form: login/reset match LOWER(email), so a stored
+  // " Admin@X.com " would register fine and then never match again.
+  // Normalize once here — every later lookup just works.
+  email = String(email).trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) {
+    return res.status(400).json({ error: "Enter a valid email address." });
   }
   if (!SUBDOMAIN_RE.test(subdomain)) {
     return res.status(400).json({ error: "Subdomain must be lowercase letters, numbers, and hyphens only." });
@@ -116,7 +126,7 @@ async function login(req, res) {
     return res.status(400).json({ error: "Email and password are required." });
   }
 
-  const session = await verifyLogin({ email, password });
+  const session = await verifyLogin({ email: String(email).trim(), password });
   if (!session) {
     return res.status(401).json({ error: "Incorrect email or password." });
   }
@@ -151,10 +161,11 @@ function logout(req, res) {
 }
 
 async function requestPasswordReset(req, res) {
-  const { email } = req.body || {};
+  let { email } = req.body || {};
   if (!email) {
     return res.status(400).json({ error: "Email is required." });
   }
+  email = String(email).trim();
 
   try {
     const rawToken = await createPasswordResetToken(email);
@@ -198,4 +209,4 @@ async function resetPassword(req, res) {
   res.json({ message: "Password updated. You can now log in." });
 }
 
-module.exports = { signup, login, logout, requestPasswordReset, resetPassword, sessionStatus, SUBDOMAIN_RE, RESERVED_SUBDOMAINS, cookieOptions };
+module.exports = { signup, login, logout, requestPasswordReset, resetPassword, sessionStatus, SUBDOMAIN_RE, EMAIL_RE, RESERVED_SUBDOMAINS, cookieOptions };

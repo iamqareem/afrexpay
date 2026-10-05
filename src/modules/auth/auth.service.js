@@ -81,6 +81,14 @@ async function createPasswordResetToken(email) {
   const user = rows[0];
   if (!user) return null;
 
+  // Hygiene: drop this user's spent/expired tokens so the table can't
+  // grow forever and old links are unambiguously dead. Valid unused
+  // tokens for the user survive (only used_at/expired rows go).
+  await pool.query(
+    `DELETE FROM password_reset_tokens WHERE user_id = $1 AND (used_at IS NOT NULL OR expires_at <= now())`,
+    [user.id]
+  );
+
   const rawToken = crypto.randomBytes(32).toString("hex");
   // Only the hash is stored — a database leak alone can't be used to reset
   // anyone's password, the raw token only ever exists in the emailed link.
@@ -115,6 +123,9 @@ async function resetPasswordWithToken(rawToken, newPassword) {
       return false;
     }
     await client.query(`UPDATE users SET password_hash = $1, token_version = token_version + 1 WHERE id = $2`, [passwordHash, record.user_id]);
+    // The password changed: every other outstanding reset link for this
+    // user dies with it (including the just-used token's siblings).
+    await client.query(`DELETE FROM password_reset_tokens WHERE user_id = $1 AND id != $2`, [record.user_id, record.id]);
     await client.query("COMMIT");
     return true;
   } catch (err) {
