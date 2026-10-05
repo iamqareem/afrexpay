@@ -76,6 +76,11 @@ export default class App {
       this.render();
     });
 
+    // DetailView renders async (photo fetch) — wait for the shell
+    // (incl. #forms-container) before the status check below, or a fast
+    // webhook-verified response finds no container and drops the banner.
+    await view.ready;
+
     // If we came back from the provider with a 'reservation' param, only
     // celebrate when the server confirms THIS listing's deposit is paid —
     // the query string alone proves nothing (only the webhook flips

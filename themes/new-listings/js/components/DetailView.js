@@ -10,7 +10,9 @@ export default class DetailView {
     this.onBack = onBack;
     this.inquiryForm = null;
     this.reservationForm = null;
-    this.render();
+    // Async (photo fetch) — App awaits .ready before touching
+    // #forms-container so the paid banner can't lose the race.
+    this.ready = this.render();
   }
 
   async render() {

@@ -58,6 +58,9 @@ router.get("/:id/status", async (req, res) => {
 });
 
 router.post("/:id/checkout", publicWriteLimiter, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(404).json({ error: "Booking not found." });
+  }
   const { successUrl, cancelUrl } = req.body || {};
   if (!successUrl || !cancelUrl) {
     return res.status(400).json({ error: "successUrl and cancelUrl are required." });

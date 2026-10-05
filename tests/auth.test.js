@@ -80,6 +80,25 @@ test("authRequired passes matching tenants and sets req.auth", async () => {
   }
 });
 
+test("authRequired rejects a revoked jti even with a matching version", async () => {
+  const restore = stubTokenVersion({ u1: 0 });
+  const originalQuery = pool.query;
+  // Revocation lookup says revoked; version lookup stays live.
+  pool.query = async (text, values) => {
+    if (/SELECT 1 FROM revoked_tokens/.test(text)) return { rows: [{ "?column?": 1 }] };
+    return originalQuery(text, values);
+  };
+  try {
+    const token = issueToken({ tenantId: "t1", subdomain: "s", uid: "u1", tv: 0 });
+    const r = await runAuth({ cookies: { afrexpay_session: token }, tenant: { id: "t1" } });
+    assert.equal(r.statusCode, 401);
+    assert.equal(r.nexted, false);
+  } finally {
+    pool.query = originalQuery;
+    restore();
+  }
+});
+
 test("authRequired rejects cross-tenant sessions and bad tokens", async () => {
   const other = issueToken({ tenantId: "t2", subdomain: "other", uid: "u2", tv: 0 });
   const r1 = await runAuth({ cookies: { afrexpay_session: other }, tenant: { id: "t1" } });
