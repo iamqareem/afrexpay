@@ -37,10 +37,10 @@ jobs:
           done
           if [ $missing -ne 0 ]; then echo "Theme CSS missing — run npm run build:css in each theme"; exit 1; fi
 
-  docker:
+  compose:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build image (smoke test — catches broken Dockerfiles pre-merge)
-        run: docker build -t afrexpay:ci .
+      - name: Validate Postgres compose file (only the db runs containerized)
+        run: docker compose config > /dev/null
