@@ -52,6 +52,45 @@ test("exceptionIsOpen treats string 'false' as closed", () => {
   assert.strictEqual(a.exceptionIsOpen(), true);
 });
 
+test("newer toasts survive older timers", async () => {
+  const a = adminApp();
+  a.showToast("first", "ok");
+  await new Promise((r) => setTimeout(r, 50));
+  a.showToast("second", "error");
+  assert.strictEqual(a.toast.message, "second");
+  // Wait past the first toast's full lifetime: only its own timer fired.
+  await new Promise((r) => setTimeout(r, 3100));
+  assert.strictEqual(a.toast, null);
+});
+
+test("formatBookingTime never renders Invalid Date", () => {
+  const a = adminApp();
+  assert.strictEqual(a.formatBookingTime("garbage"), "garbage");
+  assert.strictEqual(a.formatBookingTime(null), null);
+  const good = a.formatBookingTime('["2026-10-04T10:00:00Z",)');
+  assert.ok(!good.includes("Invalid Date"), good);
+});
+
+test("saveWeeklyHours rejects half-filled days with a named error", async () => {
+  const a = adminApp();
+  let fetched = false;
+  const originalFetch = global.fetch;
+  global.fetch = async () => {
+    fetched = true;
+    return { ok: true, json: async () => ({}) };
+  };
+  try {
+    a.weeklyHours[1] = { startTime: "09:00", endTime: "" }; // Monday half set
+    await a.saveWeeklyHours();
+    assert.strictEqual(fetched, false, "must not save a half-filled day");
+    assert.strictEqual(a.hoursSaving, false);
+    assert.ok(a.toast && a.toast.kind === "error", "must explain which day");
+    assert.ok(a.toast.message.includes("Monday"), a.toast.message);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test("markSkippedVerticalsDone clears only hidden verticals", () => {
   const a = adminApp();
   a.verticals = VERTICALS;

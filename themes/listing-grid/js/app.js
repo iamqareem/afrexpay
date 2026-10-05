@@ -180,6 +180,8 @@ async function handleInquirySubmit(e) {
   const form = e.target;
   const errorEl = document.getElementById("inquiry-error");
   errorEl.classList.add("hidden");
+  const submitBtn = form.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
 
   try {
     const res = await fetch("/api/inquiries", {
@@ -200,6 +202,7 @@ async function handleInquirySubmit(e) {
   } catch (err) {
     errorEl.textContent = err.message;
     errorEl.classList.remove("hidden");
+    if (submitBtn) submitBtn.disabled = false;
   }
 }
 

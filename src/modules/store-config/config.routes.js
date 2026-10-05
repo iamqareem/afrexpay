@@ -44,6 +44,7 @@ router.patch("/", authRequired, async (req, res) => {
   if (req.body.vertical && !isThemeCompatible(req.body.vertical, req.tenant.theme_slug)) {
     const defaultTheme = VERTICALS[req.body.vertical].compatibleThemes[0];
     await setThemeSlug(req.tenant.id, defaultTheme);
+    updated.theme_slug = defaultTheme; // don't return the stale pre-switch row
   }
 
   invalidateTenantCache(req.tenant.subdomain);

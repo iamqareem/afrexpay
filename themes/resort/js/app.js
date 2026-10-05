@@ -105,7 +105,13 @@ function renderServices() {
         ? `Showing times for ${state.selectedService.name}` : "";
       document.getElementById("step-slots").classList.remove("hidden");
       const dateInput = document.getElementById("date-picker");
-      if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+      if (!dateInput.value) {
+        // Local calendar date, not UTC: toISOString() can land on
+        // yesterday for UTC+ timezones and offer past-date slots.
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        dateInput.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      }
       loadSlots();
       document.getElementById("step-slots").scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -161,7 +167,9 @@ async function handleBookingSubmit(e) {
   const form = e.target;
   const errorEl = document.getElementById("booking-error");
   errorEl.classList.add("hidden");
-
+  const submitBtn = form.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  let failedStatus = 0;
   try {
     const res = await fetch("/api/bookings", {
       method: "POST",
@@ -175,16 +183,20 @@ async function handleBookingSubmit(e) {
       }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Could not book that slot.");
+    if (!res.ok) {
+      failedStatus = res.status;
+      throw new Error(data.error || "Could not book that slot.");
+    }
 
     showConfirm(data.id);
   } catch (err) {
-    // A 409 here means someone else booked this exact slot between the
-    // picker loading and this submit — refresh the slot list so the
-    // now-stale option disappears, rather than leaving a dead button up.
+    // Refresh only on a real 409 (slot taken) — other failures must keep
+    // the valid selection instead of wiping it while state.selectedSlot
+    // still points at the old value (resubmit risk).
     errorEl.textContent = err.message;
     errorEl.classList.remove("hidden");
-    loadSlots();
+    if (failedStatus === 409) loadSlots();
+    submitBtn.disabled = false;
   }
 }
 

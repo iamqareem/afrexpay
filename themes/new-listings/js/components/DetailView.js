@@ -15,7 +15,7 @@ export default class DetailView {
 
   async render() {
     const l = this.listing;
-    const currency = this.config?.currency || 'USD';
+    const currency = l.currency || this.config?.currency || 'USD';
 
     // fetch photos
     let photosHtml = '';

@@ -5,6 +5,7 @@
 const express = require("express");
 const authRequired = require("../../middleware/auth-required");
 const { setCustomDomain, getDomainStatus, verifyCustomDomain } = require("./domain.service");
+const { invalidateTenantCache } = require("../../middleware/tenant-resolver");
 
 const router = express.Router();
 
@@ -22,6 +23,9 @@ router.get("/", authRequired, async (req, res) => {
 router.patch("/", authRequired, async (req, res) => {
   try {
     const result = await setCustomDomain(req.tenant.id, req.body?.domain || "");
+    // The resolver caches the tenant row (incl. custom_domain) for 30s —
+    // drop it so the new claim (and its unverified status) applies now.
+    invalidateTenantCache(req.tenant.subdomain);
     res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });

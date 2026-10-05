@@ -63,35 +63,14 @@ async function renderProducts() {
     const photo = photosByProduct[i];
     const img = photo ? `/media/${photo}` : null;
 
-    // Simulate refurbished condition based on price
+    // Price shown is the merchant's real price — no invented was-price.
     const price = p.price_minor;
-    let condition, conditionLabel;
-    if (price > 500000) {
-      condition = 'excellent';
-      conditionLabel = 'EXCELLENT';
-    } else if (price > 250000) {
-      condition = 'good';
-      conditionLabel = 'GOOD';
-    } else {
-      condition = 'fair';
-      conditionLabel = 'FAIR';
-    }
-
-    // Simulate original price (20-35% higher)
-    const markup = 1.2 + Math.random() * 0.15;
-    const originalPrice = Math.round(price * markup);
-    const savings = Math.round(((originalPrice - price) / originalPrice) * 100);
 
     return `
     <div class="product-card">
     <div class="relative overflow-hidden bg-[#F7F7F8]">
     ${img ? `<img src="${img}" alt="${esc(p.name)}" loading="lazy" onerror="this.style.display='none'" class="w-full aspect-square object-cover transition-transform duration-300 hover:scale-105" />` : `<div class="w-full aspect-square bg-[#F7F7F8] flex items-center justify-center text-[#6B6B6B] text-sm">No image</div>`}
-    <div class="absolute top-3 left-3">
-    <span class="condition-badge condition-${condition}">${conditionLabel}</span>
-    </div>
-    <div class="absolute top-3 right-3">
-    <span class="price-savings">SAVE ${savings}%</span>
-    </div>
+
     </div>
     <div class="p-4">
     ${p.category ? `<p class="text-xs text-[#6B6B6B] uppercase tracking-wide">${esc(p.category)}</p>` : ''}
@@ -99,7 +78,6 @@ async function renderProducts() {
     ${p.blurb ? `<p class="text-sm text-[#6B6B6B] mt-1">${esc(p.blurb)}</p>` : ''}
     <div class="mt-3 flex items-baseline gap-2">
     <span class="price-current">${money(price)}</span>
-    <span class="price-original">${money(originalPrice)}</span>
     </div>
     <select data-size-for="${p.id}" class="w-full bg-[#F7F7F8] border border-[#EDEDF0] rounded-lg px-3 py-2 text-sm text-[#1A1A1A] mt-3 focus:outline-none focus:border-[#00AB84]">
     ${p.sizes.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}

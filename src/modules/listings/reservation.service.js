@@ -38,11 +38,19 @@ async function startCheckout(tenantId, reservationId, { successUrl, cancelUrl, p
     throw Object.assign(new Error(`This store hasn't set up ${provider} payments yet.`), { status: 400 });
   }
 
+  // Freshness + listing state: a hold older than the abandoned-checkout
+  // TTL (same default as orders/bookings) or on a delisted property can
+  // never be fulfilled — refuse before any provider session exists rather
+  // than taking a deposit for nothing.
+  const rawTtl = Number(process.env.ABANDONED_ORDER_TTL_MINUTES);
+  const ttlMinutes = Number.isFinite(rawTtl) && rawTtl > 0 ? rawTtl : 1440;
   const { rows } = await pool.query(
     `SELECT r.*, l.title AS listing_title FROM listing_reservations r
      JOIN listings l ON l.id = r.listing_id
-     WHERE r.tenant_id = $1 AND r.id = $2 AND r.payment_status = 'pending'`,
-    [tenantId, reservationId]
+     WHERE r.tenant_id = $1 AND r.id = $2 AND r.payment_status = 'pending'
+       AND l.status = 'active'
+       AND r.created_at > now() - make_interval(mins => $3)`,
+    [tenantId, reservationId, ttlMinutes]
   );
   const reservation = rows[0];
   if (!reservation) {

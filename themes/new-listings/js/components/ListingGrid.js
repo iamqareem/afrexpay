@@ -10,7 +10,7 @@ export default class ListingGrid {
   }
 
   render() {
-    const currency = this.config?.currency || 'USD';
+    const fallbackCurrency = this.config?.currency || 'USD';
     const heroLine1 = this.config?.heroTitleLine1 || 'Find your';
     const heroLine2 = this.config?.heroTitleLine2 || 'next place';
     const heroSubtitle = this.config?.heroSubtitle || 'Browse current listings below.';
@@ -29,7 +29,7 @@ export default class ListingGrid {
               <div class="p-4">
                 <span class="listing-badge">${l.listing_type === 'rent' ? 'FOR RENT' : 'FOR SALE'}</span>
                 <h3 class="font-semibold mt-2">${esc(l.title)}</h3>
-                <p class="text-accent font-semibold mt-1">${money(l.price_minor, currency)}</p>
+                <p class="text-accent font-semibold mt-1">${money(l.price_minor, l.currency || fallbackCurrency)}</p>
                 <p class="text-muted text-sm mt-1">${[l.bedrooms ? l.bedrooms + ' bd' : null, l.bathrooms ? l.bathrooms + ' ba' : null, esc(l.location)].filter(Boolean).join(' · ')}</p>
               </div>
             </div>

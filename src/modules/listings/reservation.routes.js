@@ -4,6 +4,7 @@ const authRequired = require("../../middleware/auth-required");
 const { publicWriteLimiter } = require("../../middleware/rate-limits");
 const { createReservation, startCheckout, listReservations, getReservationPaymentStatus } = require("./reservation.service");
 const { assertSafeCheckoutRedirects } = require("../../lib/checkout-redirects");
+const { UUID_RE } = require("../../lib/validate");
 
 const router = express.Router();
 
@@ -32,12 +33,18 @@ router.post("/", publicWriteLimiter, async (req, res) => {
 // listing_id lets the storefront check the deposit belongs to the listing
 // on screen. Tenant-scoped, ids unguessable.
 router.get("/:id/status", async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(404).json({ error: "Reservation not found." });
+  }
   const row = await getReservationPaymentStatus(req.tenant.id, req.params.id);
   if (!row) return res.status(404).json({ error: "Reservation not found." });
   res.json({ id: row.id, listing_id: row.listing_id, payment_status: row.payment_status });
 });
 
 router.post("/:id/checkout", publicWriteLimiter, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(404).json({ error: "Reservation not found." });
+  }
   const { successUrl, cancelUrl } = req.body || {};
   if (!successUrl || !cancelUrl) {
     return res.status(400).json({ error: "successUrl and cancelUrl are required." });

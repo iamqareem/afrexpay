@@ -3,13 +3,15 @@ const pool = require("../../db/pool");
 const { parseListParams, searchCondition } = require("../../lib/list-query");
 
 async function createInquiry(tenantId, { listingId, name, phone, message }) {
+  // Mirror storefront visibility (listListings excludes off_market):
+  // leads on a delisted property would rot in a queue nobody watches.
   const listingResult = await pool.query(
-    `SELECT id, title FROM listings WHERE tenant_id = $1 AND id = $2`,
+    `SELECT id, title FROM listings WHERE tenant_id = $1 AND id = $2 AND status != 'off_market'`,
     [tenantId, listingId]
   );
   const listing = listingResult.rows[0];
   if (!listing) {
-    throw Object.assign(new Error("Listing not found."), { status: 400 });
+    throw Object.assign(new Error("Listing not found or no longer available."), { status: 400 });
   }
 
   const { rows } = await pool.query(

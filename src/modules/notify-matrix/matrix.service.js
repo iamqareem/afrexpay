@@ -33,9 +33,9 @@ async function fetchWithTimeout(url, options) {
   }
 }
 
-function money(minor, currency) {
-  return `${currency || "UGX"} ${Number(minor).toLocaleString("en-UG")}`;
-}
+// Canonical formatter (zero-decimal aware): the old local helper printed
+// raw minor units, misstating every decimal-currency amount 100x.
+const { formatPrice: money } = require("../../lib/currency");
 
 function escapeHtml(s) {
   return String(s ?? "")

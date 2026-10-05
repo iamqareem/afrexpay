@@ -6,6 +6,7 @@ const { createOrder, listOrders, getOrderPaymentStatus, startOrderCheckout, upda
 const { getConfig } = require("../store-config/config.service");
 const { notifyNewOrder } = require("../notify-matrix/matrix.service");
 const { assertSafeCheckoutRedirects } = require("../../lib/checkout-redirects");
+const { UUID_RE } = require("../../lib/validate");
 
 const router = express.Router();
 
@@ -31,12 +32,18 @@ router.post("/", publicWriteLimiter, async (req, res) => {
 // actually paid instead of trusting the ?paid=1 query param. Tenant-scoped,
 // ids unguessable.
 router.get("/:id/status", async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(404).json({ error: "Order not found." });
+  }
   const row = await getOrderPaymentStatus(req.tenant.id, req.params.id);
   if (!row) return res.status(404).json({ error: "Order not found." });
   res.json({ id: row.id, status: row.status, payment_status: row.payment_status });
 });
 
 router.post("/:id/checkout", publicWriteLimiter, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(404).json({ error: "Order not found." });
+  }
   const { successUrl, cancelUrl, provider } = req.body || {};
   if (!successUrl || !cancelUrl) {
     return res.status(400).json({ error: "successUrl and cancelUrl are required." });
@@ -64,6 +71,9 @@ router.get("/", authRequired, async (req, res) => {
 });
 
 router.patch("/:id", authRequired, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(404).json({ error: "Order not found." });
+  }
   const { status } = req.body || {};
   if (!ORDER_STATUSES.includes(status)) {
     return res.status(400).json({ error: `status must be one of: ${ORDER_STATUSES.join(", ")}.` });

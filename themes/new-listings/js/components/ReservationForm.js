@@ -43,7 +43,7 @@ export default class ReservationForm {
     this.container.innerHTML += `
       <div class="max-w-md bg-surface border border-surface2 rounded-lg p-5 mb-4" id="reservation-panel">
         <h3 class="font-semibold mb-1">Reserve this listing</h3>
-        <p class="text-muted text-sm mb-3">A deposit of <span class="text-accent font-semibold" id="deposit-amount">${money(this.listing.deposit_amount_minor, this.config?.currency)}</span> secures your reservation.</p>
+        <p class="text-muted text-sm mb-3">A deposit of <span class="text-accent font-semibold" id="deposit-amount">${money(this.listing.deposit_amount_minor, this.listing.currency || this.config?.currency)}</span> secures your reservation.</p>
         <form id="reservation-form" class="space-y-3">
           <div>
             <label class="block text-xs text-muted mb-1">Name</label>

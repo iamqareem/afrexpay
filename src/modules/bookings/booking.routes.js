@@ -42,6 +42,9 @@ router.post("/", publicWriteLimiter, async (req, res) => {
 // Public — server-side truth for the buyer's confirmation screen
 // (see order.routes.js). Tenant-scoped, ids unguessable.
 router.get("/:id/status", async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(404).json({ error: "Booking not found." });
+  }
   const row = await getBookingPaymentStatus(req.tenant.id, req.params.id);
   if (!row) return res.status(404).json({ error: "Booking not found." });
   res.json({ id: row.id, status: row.status, payment_status: row.payment_status });

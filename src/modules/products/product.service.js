@@ -39,9 +39,11 @@ async function createProduct(tenantId, data) {
 async function updateProduct(tenantId, productId, data) {
   const fields = [];
   const values = [tenantId, productId];
+  // `active` is writable so a deactivated product can be reactivated
+  // via PATCH (DELETE only deactivates — previously a one-way door).
   const columnMap = {
     name: "name", category: "category", priceMinor: "price_minor", currency: "currency",
-    sizes: "sizes", stockQty: "stock_qty", blurb: "blurb",
+    sizes: "sizes", stockQty: "stock_qty", blurb: "blurb", active: "active",
   };
   for (const [key, column] of Object.entries(columnMap)) {
     if (data[key] !== undefined) {

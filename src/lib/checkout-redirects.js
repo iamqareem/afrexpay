@@ -17,7 +17,11 @@ function tenantHosts(tenant) {
   const base = baseDomain();
   const hosts = new Set([base, `www.${base}`]);
   if (tenant?.subdomain) hosts.add(`${String(tenant.subdomain).toLowerCase()}.${baseDomain()}`);
-  if (tenant?.custom_domain) hosts.add(String(tenant.custom_domain).toLowerCase());
+  // Verified custom domains only: a merely-claimed domain (verified_at
+  // NULL) must never join the redirect/CSRF allowlist pre-proof.
+  if (tenant?.custom_domain && tenant?.custom_domain_verified_at) {
+    hosts.add(String(tenant.custom_domain).toLowerCase());
+  }
   return hosts;
 }
 

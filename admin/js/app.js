@@ -250,9 +250,14 @@ function adminApp() {
       }
     },
 
+    toastSeq: 0,
+
     showToast(message, kind = "ok") {
+      // Generation counter: without it, an earlier toast's timer clears a
+      // newer toast early — hiding error toasts behind stale timers.
+      const seq = ++this.toastSeq;
       this.toast = { message, kind };
-      setTimeout(() => { this.toast = null; }, 3000);
+      setTimeout(() => { if (this.toastSeq === seq) this.toast = null; }, 3000);
     },
 
     // ---- auth ----
@@ -1142,6 +1147,12 @@ function adminApp() {
 
     async saveWeeklyHours() {
       this.hoursSaving = true;
+      const half = this.weeklyHours.findIndex((h) => (!!h.startTime) !== (!!h.endTime));
+      if (half !== -1) {
+        this.hoursSaving = false;
+        this.showToast(`${this.weekDays[half]} has only an open or a close time — set both or clear both.`, "error");
+        return;
+      }
       const windows = this.weeklyHours
         .map((h, dayOfWeek) => ({ dayOfWeek, startTime: h.startTime, endTime: h.endTime }))
         .filter((w) => w.startTime && w.endTime);
@@ -1252,7 +1263,8 @@ function adminApp() {
     formatBookingTime(rangeStr) {
       const match = String(rangeStr).match(/[\[(]"?([^,"]+)"?,/);
       if (!match) return rangeStr;
-      return new Date(match[1]).toLocaleString();
+      const d = new Date(match[1]);
+      return isNaN(d) ? rangeStr : d.toLocaleString();
     },
 
     // ---- listings ----

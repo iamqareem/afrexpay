@@ -83,9 +83,14 @@ app.get("/js/afrexpay-checkout.js", (req, res) => {
 // Instantiated once: the old per-request express.static() churned a
 // handler object on every base-domain hit for no reason.
 const baseStatic = express.static(path.join(__dirname, "..", "public"));
+const BASE_DOMAIN = (process.env.BASE_DOMAIN || "afrexpay.com").toLowerCase();
 app.use((req, res, next) => {
-  const subdomain = extractSubdomain(req.headers.host);
-  if (subdomain === null && !req.path.startsWith("/api")) {
+  // Host check is load-bearing: extractSubdomain() is null for custom
+  // domains too, and serving public/ for those hijacked every verified
+  // custom storefront with the marketing site.
+  const host = String(req.headers.host || "").split(":")[0].toLowerCase();
+  const isBase = host === BASE_DOMAIN || host === `www.${BASE_DOMAIN}`;
+  if (isBase && !req.path.startsWith("/api")) {
     return baseStatic(req, res, next);
   }
   next();

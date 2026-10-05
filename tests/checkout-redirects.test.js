@@ -6,7 +6,8 @@ const { test } = require("node:test");
 const assert = require("node:assert");
 const { assertSafeCheckoutRedirects } = require("../src/lib/checkout-redirects");
 
-const tenant = { subdomain: "glow-salon", custom_domain: "shop.example.com" };
+const tenant = { subdomain: "glow-salon", custom_domain: "shop.example.com", custom_domain_verified_at: "2026-01-01T00:00:00Z" };
+const unverifiedTenant = { subdomain: "glow-salon", custom_domain: "shop.example.com", custom_domain_verified_at: null };
 
 test("accepts the tenant subdomain and custom domain over https", () => {
   assert.doesNotThrow(() =>
@@ -15,6 +16,18 @@ test("accepts the tenant subdomain and custom domain over https", () => {
       "https://shop.example.com/cancel",
       tenant
     )
+  );
+});
+
+test("rejects merely-claimed (unverified) custom domains", () => {
+  assert.throws(
+    () =>
+      assertSafeCheckoutRedirects(
+        "https://shop.example.com/x",
+        "https://glow-salon.afrexpay.com/y",
+        unverifiedTenant
+      ),
+    /must point back to this store/
   );
 });
 

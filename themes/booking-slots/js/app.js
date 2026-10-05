@@ -81,7 +81,13 @@ async function renderServices() {
       state.selectedSlot = null;
       document.getElementById("step-slots").classList.remove("hidden");
       const dateInput = document.getElementById("date-picker");
-      if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+      if (!dateInput.value) {
+        // Local calendar date, not UTC: toISOString() can land on
+        // yesterday for UTC+ timezones and offer past-date slots.
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        dateInput.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      }
       loadSlots();
     });
   });
@@ -151,6 +157,8 @@ async function handleBookingSubmit(e) {
   const form = e.target;
   const errorEl = document.getElementById("booking-error");
   errorEl.classList.add("hidden");
+  const submitBtn = form.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
 
   // Only a 409 means "someone else took the slot" — other failures
   // (validation, closed day, network) must keep the valid selection.
@@ -182,6 +190,8 @@ async function handleBookingSubmit(e) {
     errorEl.textContent = err.message;
     errorEl.classList.remove("hidden");
     if (failedStatus === 409) loadSlots();
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = false;
   }
 }
 

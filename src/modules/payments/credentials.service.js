@@ -18,10 +18,14 @@ async function getCredentialsSummary(tenantId, provider) {
   return rows[0] || null;
 }
 
-async function getDecryptedCredentials(tenantId, provider) {
+// requireEnabled defaults true (new checkouts need a live provider), but
+// webhooks must verify against STORED secrets even after a merchant flips
+// enabled off mid-flight — otherwise an in-flight capture 400s with funds
+// moved and the row stuck pending. Signature verification is not a sale.
+async function getDecryptedCredentials(tenantId, provider, { requireEnabled = true } = {}) {
   const { rows } = await pool.query(
     `SELECT secret_key_encrypted, publishable_key, webhook_secret_encrypted, mode, enabled
-     FROM payment_credentials WHERE tenant_id = $1 AND provider = $2 AND enabled = true`,
+     FROM payment_credentials WHERE tenant_id = $1 AND provider = $2${requireEnabled ? " AND enabled = true" : ""}`,
     [tenantId, provider]
   );
   const row = rows[0];

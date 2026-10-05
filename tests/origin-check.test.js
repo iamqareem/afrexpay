@@ -9,7 +9,7 @@ const assert = require("node:assert");
 process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret-for-origin-check";
 const { requestOrigin, isAllowedOrigin } = require("../src/lib/origin-check");
 
-const tenant = { subdomain: "glow-salon", custom_domain: "shop.example.com" };
+const tenant = { subdomain: "glow-salon", custom_domain: "shop.example.com", custom_domain_verified_at: "2026-01-01T00:00:00Z" };
 
 test("requestOrigin prefers Origin, falls back to Referer origin, null when absent", () => {
   assert.strictEqual(
@@ -35,6 +35,11 @@ test("isAllowedOrigin accepts the tenant subdomain, custom domain and platform h
   }
 });
 
+test("isAllowedOrigin refuses unverified custom domains", () => {
+  const unverified = { subdomain: "glow-salon", custom_domain: "shop.example.com", custom_domain_verified_at: null };
+  assert.strictEqual(isAllowedOrigin("https://shop.example.com", unverified), false);
+});
+
 test("isAllowedOrigin refuses attacker tenants, lookalikes and other tenants", () => {
   for (const origin of [
     "https://evil.afrexpay.com",
@@ -52,7 +57,7 @@ test("authRequired refuses cross-origin mutations but allows reads and headerles
   const authRequired = require("../src/middleware/auth-required");
   const { issueToken } = require("../src/modules/auth/auth.service");
   const pool = require("../src/db/pool");
-  const tenantRow = { id: "tenant-1", subdomain: "glow-salon", custom_domain: null };
+  const tenantRow = { id: "tenant-1", subdomain: "glow-salon", custom_domain: null, custom_domain_verified_at: null };
   const token = issueToken({ tenantId: "tenant-1", subdomain: "glow-salon", uid: "u9", tv: 3 });
   const originalQuery = pool.query;
   pool.query = async () => ({ rows: [{ token_version: 3 }] });

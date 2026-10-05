@@ -44,7 +44,7 @@ async function handleStripeWebhook(req, res) {
     return res.status(400).json({ error: "Missing Stripe-Signature header." });
   }
 
-  const credentials = await getDecryptedCredentials(tenantId, "stripe");
+  const credentials = await getDecryptedCredentials(tenantId, "stripe", { requireEnabled: false });
   if (!credentials || !credentials.webhookSecret) {
     return res.status(400).json({ error: "Webhook not configured." });
   }
@@ -66,13 +66,23 @@ async function handleStripeWebhook(req, res) {
     return res.status(200).json({ received: true });
   }
 
+  // The dashboard prints a per-tenant webhook URL; a copy-paste into the
+  // wrong tenant's Stripe settings verifies against the WRONG secret and
+  // then matches zero rows (silent 200, no credit). The signed metadata is
+  // authoritative — refuse loudly on mismatch instead.
+  const eventTenantId = event.data?.object?.metadata?.tenantId;
+  if (!eventTenantId || eventTenantId !== tenantId) {
+    console.error(`Stripe webhook tenant mismatch: URL ${tenantId} vs metadata ${eventTenantId}. Check the webhook URL in Stripe.`);
+    return res.status(400).json({ error: "Webhook tenant mismatch." });
+  }
+
   await processPaymentEvent(tenantId, "stripe", event, res);
 }
 
 async function handlePayPalWebhook(req, res) {
   const { tenantId } = req.params;
 
-  const credentials = await getDecryptedCredentials(tenantId, "paypal");
+  const credentials = await getDecryptedCredentials(tenantId, "paypal", { requireEnabled: false });
   if (!credentials || !credentials.webhookSecret) {
     return res.status(400).json({ error: "Webhook not configured." });
   }
@@ -146,6 +156,10 @@ async function processPaymentEvent(tenantId, provider, event, res) {
 
     let paidItem = null;
     let notifyPayload = null;
+    // PayPal resolves the real tenant from its order context (the URL
+    // tenant is just where Stripe/PayPal were pointed) — notifications
+    // must follow the money, defaulting to the URL tenant for Stripe.
+    let notifyTenantId = tenantId;
 
     // Try each entity type - the webhook will only match the correct one
     // because of the unique session ID per entity
@@ -207,6 +221,7 @@ async function processPaymentEvent(tenantId, provider, event, res) {
 
       const entityType = context?.entity_type;
       const targetTenantId = context?.tenant_id || tenantId;
+      notifyTenantId = targetTenantId;
 
       if (entityType === "order") {
         paidItem = await markOrderPaid(targetTenantId, orderId, amountMinor, currency, "paypal", providerRef);
@@ -272,9 +287,9 @@ async function processPaymentEvent(tenantId, provider, event, res) {
     }
 
     if (notifyPayload) {
-      const tenantResult = await pool.query(`SELECT business_name FROM tenants WHERE id = $1`, [tenantId]);
+      const tenantResult = await pool.query(`SELECT business_name FROM tenants WHERE id = $1`, [notifyTenantId]);
       const businessName = tenantResult.rows[0]?.business_name;
-      const { config } = await getConfig(tenantId);
+      const { config } = await getConfig(notifyTenantId);
       notifyNewOrder(config?.matrixRoomId, businessName, notifyPayload).catch((err) =>
         console.error("Matrix notification for paid item failed:", err.message)
       );
