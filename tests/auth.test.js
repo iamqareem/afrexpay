@@ -153,3 +153,40 @@ test("cookieOptions is httpOnly/lax with a 7-day life and base-domain scope", ()
     assert.equal(opts.domain, `.${base}`);
   }
 });
+
+test("sessionStatus enforces uid + live version like data endpoints", async () => {
+  const { sessionStatus } = require("../src/modules/auth/auth.controller");
+  const run = async (cookies) => {
+    let code = null;
+    let body = null;
+    // Top-level json (the 200 path) AND status().json (the 401 paths).
+    const res = {
+      json: (b) => { body = b; },
+      status: (c) => { code = c; return { json: (b) => { body = b; } }; },
+    };
+    await sessionStatus({ cookies }, res);
+    return { code, body };
+  };
+  const original = pool.query;
+  pool.query = async () => ({ rows: [{ token_version: 2 }] });
+  try {
+    // Fresh session passes with tenant identity.
+    const fresh = issueToken({ tenantId: "t1", subdomain: "s", uid: "u1", tv: 2 });
+    const ok = await run({ afrexpay_session: fresh });
+    assert.equal(ok.code, null); // res.json without status = 200 path
+    assert.deepEqual(ok.body, { tenantId: "t1", subdomain: "s" });
+
+    // Stale pre-revocation session (no uid) lands on login, not a loop.
+    const legacy = issueToken({ tenantId: "t1", subdomain: "s" });
+    assert.equal((await run({ afrexpay_session: legacy })).code, 401);
+
+    // Version-bumped session (post-reset) is rejected.
+    const stale = issueToken({ tenantId: "t1", subdomain: "s", uid: "u1", tv: 1 });
+    assert.equal((await run({ afrexpay_session: stale })).code, 401);
+
+    // No cookie at all.
+    assert.equal((await run({})).code, 401);
+  } finally {
+    pool.query = original;
+  }
+});

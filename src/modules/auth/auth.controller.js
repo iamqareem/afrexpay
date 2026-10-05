@@ -36,17 +36,25 @@ function cookieOptions() {
   return opts;
 }
 
-const { verifyToken } = require("./auth.service");
+const { verifyToken, getUserTokenVersion } = require("./auth.service");
 
 async function sessionStatus(req, res) {
-  // Lightweight auth probe for the admin boot: verifies the cookie only,
-  // no tenant lookup, no data queries. The old probe (GET /api/orders)
-  // pulled the whole orders table just to read res.ok — and a 500 from
-  // that data endpoint showed the login screen despite a valid session.
+  // Lightweight auth probe for the admin boot: no tenant lookup, no data
+  // queries — but the SAME bar as data endpoints (uid + live token
+  // version). A signature-only check let stale pre-revocation sessions
+  // pass the probe and then 401 on every data call, leaving the dashboard
+  // in an infinite skeleton loop instead of the login screen.
   const token = req.cookies?.afrexpay_session;
   if (!token) return res.status(401).json({ error: "Not logged in." });
   try {
     const payload = verifyToken(token);
+    if (!payload.uid) {
+      return res.status(401).json({ error: "Session expired or invalid. Log in again." });
+    }
+    const current = await getUserTokenVersion(payload.uid);
+    if (current === null || current !== payload.tv) {
+      return res.status(401).json({ error: "Session expired or invalid. Log in again." });
+    }
     res.json({ tenantId: payload.tenantId, subdomain: payload.subdomain });
   } catch {
     res.status(401).json({ error: "Session expired or invalid. Log in again." });

@@ -137,15 +137,21 @@ test("listReservations filters by payment status and rejects unknown ones", asyn
   }
 });
 
-test("sessionStatus verifies the cookie with no database or tenant", async () => {
-  const token = issueToken({ tenantId: "t1", subdomain: "s", uid: "u1", tv: 0 });
-  let body;
-  const res = { status(c) { this.code = c; return this; }, json(b) { body = b; } };
-  await authController.sessionStatus({ cookies: { afrexpay_session: token } }, res);
-  assert.deepStrictEqual(body, { tenantId: "t1", subdomain: "s" });
+test("sessionStatus verifies a live session with no tenant lookup", async () => {
+  const original = pool.query;
+  pool.query = async () => ({ rows: [{ token_version: 0 }] });
+  try {
+    const token = issueToken({ tenantId: "t1", subdomain: "s", uid: "u1", tv: 0 });
+    let body;
+    const res = { status(c) { this.code = c; return this; }, json(b) { body = b; } };
+    await authController.sessionStatus({ cookies: { afrexpay_session: token } }, res);
+    assert.deepStrictEqual(body, { tenantId: "t1", subdomain: "s" });
 
-  let code;
-  const res2 = { status(c) { code = c; return this; }, json() {} };
-  await authController.sessionStatus({ cookies: {} }, res2);
-  assert.strictEqual(code, 401);
+    let code;
+    const res2 = { status(c) { code = c; return this; }, json() {} };
+    await authController.sessionStatus({ cookies: {} }, res2);
+    assert.strictEqual(code, 401);
+  } finally {
+    pool.query = original;
+  }
 });

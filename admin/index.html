@@ -103,7 +103,15 @@
             <div style="height:0.75rem"></div>
             <span class="skel" style="width:55%"></span>
           </div>
-          <div x-show="!homeLoading()">
+          <div class="card" x-show="!homeLoading() && bootstrapFailed">
+            <h3>Couldn't load the dashboard</h3>
+            <p class="muted">The store settings or business categories failed to load — this is usually a tired session or a server hiccup, not your data.</p>
+            <div class="cluster">
+              <button class="btn" @click="retryBootstrap()">Retry</button>
+              <button class="btn ghost" @click="logout()">Log out and back in</button>
+            </div>
+          </div>
+          <div x-show="!homeLoading() && !bootstrapFailed">
             <div class="stat-grid">
               <template x-if="tabVisible('orders')">
                 <div class="stat-card">

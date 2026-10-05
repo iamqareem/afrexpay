@@ -101,3 +101,37 @@ test("markSkippedVerticalsDone clears only hidden verticals", () => {
   assert.strictEqual(a.loading.listings, true); // visible → untouched
   assert.strictEqual(a.loading.inquiries, true);
 });
+
+test("failed registry/config loads latch an error state instead of looping", async () => {
+  const { adminApp } = require("../admin/js/app.js");
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({ ok: false, json: async () => ({}) });
+  try {
+    const a = adminApp();
+    await a.loadConfig();
+    assert.strictEqual(a.bootstrapFailed, true);
+    assert.strictEqual(a.homeLoading(), false, "must not skeleton-loop on boot failure");
+
+    const b = adminApp();
+    await b.loadVerticals();
+    assert.strictEqual(b.bootstrapFailed, true);
+    assert.strictEqual(b.homeLoading(), false);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("retryBootstrap re-arms skeletons and re-latches while broken", async () => {
+  const { adminApp } = require("../admin/js/app.js");
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({ ok: false, json: async () => ({}) });
+  try {
+    const a = adminApp();
+    a.verticals = {};
+    await a.retryBootstrap();
+    assert.strictEqual(a.bootstrapFailed, true, "still broken → latched again, not looping");
+    assert.strictEqual(a.loading.products, false, "loaders settle even on failure");
+  } finally {
+    global.fetch = originalFetch;
+  }
+});

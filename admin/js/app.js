@@ -8,6 +8,7 @@ function adminApp() {
     loggedIn: false,
     tab: "home",
     toast: null,
+    bootstrapFailed: false,
 
     // photo manager UI state (shared across product/service/listing)
     uploadingPhotos: false,
@@ -198,6 +199,7 @@ function adminApp() {
     },
 
     async loadAll() {
+      this.bootstrapFailed = false;
       // Config + vertical registry first: everything below branches on
       // tabVisible(), which needs BOTH this.config.vertical and
       // this.verticals. They used to load in the same Promise.all as the
@@ -246,7 +248,23 @@ function adminApp() {
         if (!res.ok) throw new Error("Could not load business categories.");
         this.verticals = await res.json();
       } catch (err) {
+        this.bootstrapFailed = true;
         this.showToast(err.message || "Could not load business categories.", "error");
+      }
+    },
+
+    // Manual retry for the home error card: re-arm every skeleton and run
+    // the whole boot sequence again (loadAll clears bootstrapFailed first,
+    // so a still-broken backend re-latches it instead of looping).
+    async retryBootstrap() {
+      this.loading = {
+        products: true, orders: true, services: true, hours: true,
+        exceptions: true, bookings: true, listings: true,
+        inquiries: true, reservations: true, resources: true,
+      };
+      await this.loadAll();
+      if (!["home", "config", "payments", "domain"].includes(this.tab) && !this.tabVisible(this.tab)) {
+        this.tab = "home";
       }
     },
 
@@ -375,6 +393,7 @@ function adminApp() {
         const data = await res.json();
         this.config = data.config || {};
       } catch (err) {
+        this.bootstrapFailed = true;
         this.showToast(err.message || "Could not load store settings.", "error");
       }
     },
@@ -809,6 +828,7 @@ function adminApp() {
       // happened on listings/services stores. While the vertical registry
       // itself is still loading, tabVisible() is false for everything, so
       // keep the skeleton up rather than flashing an empty dashboard.
+      if (this.bootstrapFailed) return false;
       if (!this.verticals || Object.keys(this.verticals).length === 0) return true;
       const l = this.loading;
       if (this.tabVisible("products") && l.products) return true;
