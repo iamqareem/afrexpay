@@ -158,4 +158,19 @@ async function inviteToRoom(roomId, matrixUserId) {
   });
 }
 
-module.exports = { notifyNewOrder, sendMessage, formatOrderMessage, createOrderRoom, inviteToRoom };
+// True when the room itself still exists (create-event readable),
+// regardless of our membership. Lets connect distinguish "stored room is
+// gone" (recreate) from "user ID is bad on a healthy room" (surface the
+// error). Network/homeserver failures fail OPEN (true) so a flaky probe
+// can never trigger a replacement-room cascade.
+async function roomExists(roomId) {
+  try {
+    await matrixRequest("GET", `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.create/`);
+    return true;
+  } catch (err) {
+    if (/M_NOT_FOUND|404/.test(err.message || "")) return false;
+    return true;
+  }
+}
+
+module.exports = { notifyNewOrder, sendMessage, formatOrderMessage, createOrderRoom, inviteToRoom, roomExists };

@@ -202,25 +202,41 @@ async function updateBookingStatus(tenantId, bookingId, status) {
   // Terminal states stay terminal: resurrecting a cancelled/completed
   // booking would re-activate its time_range without revalidating working
   // hours or the exclusion constraint (slot may be rebooked) — confirm/
-  // complete/cancel only move forward from a live state.
-  const currentResult = await pool.query(
-    `SELECT status FROM bookings WHERE tenant_id = $1 AND id = $2`,
-    [tenantId, bookingId]
-  );
-  const current = currentResult.rows[0]?.status;
-  if (!current) return null;
-  const allowed = BOOKING_TRANSITIONS[current] || new Set();
-  if (!allowed.has(status)) {
-    throw Object.assign(
-      new Error(`Cannot move booking from '${current}' to '${status}'.`),
-      { status: 400 }
+  // complete/cancel only move forward from a live state. The row lock
+  // closes the read-check-write race (read pending, concurrent cancel,
+  // write confirmed anyway).
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const currentResult = await client.query(
+      `SELECT status FROM bookings WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
+      [tenantId, bookingId]
     );
+    const current = currentResult.rows[0]?.status;
+    if (!current) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+    const allowed = BOOKING_TRANSITIONS[current] || new Set();
+    if (!allowed.has(status)) {
+      await client.query("ROLLBACK");
+      throw Object.assign(
+        new Error(`Cannot move booking from '${current}' to '${status}'.`),
+        { status: 400 }
+      );
+    }
+    const { rows } = await client.query(
+      `UPDATE bookings SET status = $3 WHERE tenant_id = $1 AND id = $2 RETURNING *`,
+      [tenantId, bookingId, status]
+    );
+    await client.query("COMMIT");
+    return rows[0] || null;
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw err;
+  } finally {
+    client.release();
   }
-  const { rows } = await pool.query(
-    `UPDATE bookings SET status = $3 WHERE tenant_id = $1 AND id = $2 RETURNING *`,
-    [tenantId, bookingId, status]
-  );
-  return rows[0] || null;
 }
 
 const { getProvider } = require("../payments/providers");
@@ -302,7 +318,7 @@ async function markBookingPaid(tenantId, sessionId, amountMinor, currency, provi
     const sessionIdField = provider === "paypal" ? "paypal_checkout_session_id" : "stripe_checkout_session_id";
     const { rows } = await client.query(
       `UPDATE bookings SET payment_status = 'paid', status = 'confirmed'
-       WHERE tenant_id = $1 AND payment_status IN ('pending', 'failed') AND status != 'cancelled'
+       WHERE tenant_id = $1 AND payment_status IN ('pending', 'failed') AND status NOT IN ('cancelled', 'completed')
          AND (${sessionIdField} = $2 OR id IN (
            SELECT entity_id FROM checkout_sessions
            WHERE provider = $3 AND session_id = $2 AND tenant_id = $1 AND entity_type = 'booking'

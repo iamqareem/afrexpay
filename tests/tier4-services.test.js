@@ -92,7 +92,11 @@ test("setMatrixRoomIfUnset writes only when no room is stored", async () => {
   const original = pool.query;
   pool.query = async (text, values) => {
     seen.push({ text, values });
-    if (/matrixRoomId' IS NULL/.test(text)) return { rows: [] }; // lost the race
+    if (/INSERT INTO store_configs/.test(text)) {
+      assert.match(text, /ON CONFLICT \(tenant_id\) DO UPDATE/, "must upsert rowless tenants");
+      assert.match(text, /matrixRoomId' IS NULL/, "must only fill unset rooms");
+      return { rows: [] }; // lost the race: conditional update matched nothing
+    }
     if (/FROM store_configs/.test(text)) {
       return { rows: [{ config: { matrixRoomId: "winner-room" } }] };
     }
@@ -102,7 +106,7 @@ test("setMatrixRoomIfUnset writes only when no room is stored", async () => {
     const result = await configService.setMatrixRoomIfUnset("t1", "orphan-room");
     assert.strictEqual(result.created, false);
     assert.strictEqual(result.roomId, "winner-room");
-    assert.ok(seen.some((c) => /jsonb_set\(config, '\{matrixRoomId\}'/.test(c.text)));
+    assert.ok(seen.some((c) => /jsonb_set\((store_configs\.)?config, '\{matrixRoomId\}'/.test(c.text)));
   } finally {
     pool.query = original;
   }

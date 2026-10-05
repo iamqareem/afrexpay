@@ -2,7 +2,7 @@
 const express = require("express");
 const authRequired = require("../../middleware/auth-required");
 const { getConfig, setMatrixRoomIfUnset } = require("../store-config/config.service");
-const { createOrderRoom, inviteToRoom } = require("./matrix.service");
+const { createOrderRoom, inviteToRoom, roomExists } = require("./matrix.service");
 
 const router = express.Router();
 
@@ -34,7 +34,11 @@ router.post("/connect", authRequired, async (req, res) => {
       try {
         await doInvite(roomId);
       } catch (err) {
+        // M_NOT_FOUND is ambiguous (dead room vs bad user ID) — probe the
+        // room before concluding anything. A healthy room means the USER
+        // id is bad: surface that instead of minting a replacement room.
         if (!isUnknownRoom(err)) throw err;
+        if (await roomExists(roomId)) throw err;
         console.error(`Matrix room ${roomId} is stale — recreating.`);
         roomId = null;
       }
@@ -46,8 +50,10 @@ router.post("/connect", authRequired, async (req, res) => {
       const saved = await setMatrixRoomIfUnset(req.tenant.id, created);
       roomId = saved.roomId;
       if (!saved.created && saved.roomId) {
-        // Lost a concurrent first-connect race — use the winner's room.
+        // Lost a concurrent first-connect race — adopt the winner's room
+        // AND invite into it (the invite went to our orphaned room).
         console.error(`Matrix connect race for tenant ${req.tenant.id}: using existing room.`);
+        await doInvite(saved.roomId);
       }
       if (!roomId) {
         throw new Error("Could not persist the notification room.");

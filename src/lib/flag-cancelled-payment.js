@@ -5,6 +5,9 @@
 // still have been charged at the provider. That needs a human (refund),
 // not silence: log loudly with everything ops needs to find the money.
 // Table/column names are whitelisted, never interpolated from input.
+// Scope: orders + bookings only — listing_reservations has no status
+// lifecycle (no cancelled state exists to guard), so there is nothing to
+// flag there; the TABLES whitelist intentionally excludes it.
 const pool = require("../db/pool");
 
 const TABLES = {

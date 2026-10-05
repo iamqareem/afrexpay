@@ -51,7 +51,7 @@ test("late payment for a sweep-cancelled booking does NOT resurrect it", async (
       if (/^\s*BEGIN|COMMIT|ROLLBACK/i.test(text)) return { rows: [] };
       if (/UPDATE bookings SET payment_status = 'paid'/.test(text)) {
         // The status guard is what makes this 0 rows for cancelled rows.
-        assert.match(text, /status != 'cancelled'/, "markBookingPaid must exclude cancelled rows");
+        assert.match(text, /status NOT IN \('cancelled', 'completed'\)/, "markBookingPaid must exclude terminal rows");
         assert.match(text, /checkout_sessions/, "history fallback must survive the guard");
         return { rows: [] }; // cancelled row matches nothing
       }
@@ -134,11 +134,13 @@ test("late payment for a sweep-cancelled order does NOT resurrect it either", as
 });
 
 test("booking status transitions are forward-only", async () => {
+  const statusById = { b1: "pending", b2: "cancelled", b3: "completed", b4: "confirmed" };
   const { restore } = stubPool({
-    query: async (text, values) => {
+    connectQuery: async (text, values) => {
+      if (/^\s*BEGIN|^\s*COMMIT|^\s*ROLLBACK/i.test(text)) return { rows: [] };
       if (/SELECT status FROM bookings/.test(text)) {
+        assert.match(text, /FOR UPDATE/, "read-check-write must lock the row");
         const id = values[1];
-        const statusById = { b1: "pending", b2: "cancelled", b3: "completed", b4: "confirmed" };
         return statusById[id] ? { rows: [{ status: statusById[id] }] } : { rows: [] };
       }
       if (/UPDATE bookings SET status/.test(text)) {

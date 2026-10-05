@@ -75,13 +75,20 @@ async function setThemeSlug(tenantId, themeSlug) {
 // orphaning a second room — two concurrent first-connects used to each
 // create one and strand one.
 async function setMatrixRoomIfUnset(tenantId, roomId) {
+  // INSERT-first upsert: a tenant with no store_configs row (legacy/raced
+  // signup) gets one created; a row that already names a room is left
+  // alone (conditional DO UPDATE). Either way exactly one room wins.
   const { rows } = await pool.query(
-    `UPDATE store_configs SET config = jsonb_set(config, '{matrixRoomId}', to_jsonb($2::text)), updated_at = now()
-     WHERE tenant_id = $1 AND (config->>'matrixRoomId' IS NULL)
+    `INSERT INTO store_configs (tenant_id, config, theme_slug)
+     VALUES ($1, jsonb_build_object('vertical', 'products', 'matrixRoomId', $2), 'hangtag')
+     ON CONFLICT (tenant_id) DO UPDATE
+       SET config = jsonb_set(store_configs.config, '{matrixRoomId}', to_jsonb($2::text)),
+           updated_at = now()
+       WHERE store_configs.config->>'matrixRoomId' IS NULL
      RETURNING config->>'matrixRoomId' AS "matrixRoomId"`,
     [tenantId, roomId]
   );
-  if (rows[0]) return { roomId: rows[0].matrixRoomId, created: true };
+  if (rows[0]?.matrixRoomId) return { roomId: rows[0].matrixRoomId, created: true };
   const current = await getConfig(tenantId);
   return { roomId: current.config?.matrixRoomId || null, created: false };
 }

@@ -133,8 +133,11 @@ async function handlePayPalWebhook(req, res) {
 
 async function processPaymentEvent(tenantId, provider, event, res) {
   try {
-    const paymentProvider = require("./providers")[provider];
-    const normalized = paymentProvider.normalizePayment ? paymentProvider.normalizePayment(event) : null;
+    // Registry lookup, not property access: require("./providers") exposes
+    // { getProvider, listProviders, REGISTRY } — ["stripe"] on that object
+    // is undefined, and the old code 500'd EVERY webhook on the next line.
+    // (normalizePayment itself is called per-branch below; nothing is lost.)
+    getProvider(provider);
 
     // For Stripe, entityType is in metadata; for PayPal, we need to infer or pass via custom fields
     // For now, we'll need to store the entity type in the session/order metadata

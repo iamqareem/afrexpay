@@ -116,7 +116,7 @@ async function markReservationPaid(tenantId, sessionId, amountMinor, currency, p
     // `expectedAmount &&` clause did exactly that for missing rows).
     const expectedAmount = reservation.deposit_amount_minor;
     const expectedCurrency = reservation.currency;
-    if (!amountMinor || (expectedAmount && amountMinor !== expectedAmount)) {
+    if (!amountMinor || amountMinor !== expectedAmount) {
       await client.query("ROLLBACK");
       console.error(`Reservation ${reservation.id} underpaid: expected ${expectedAmount} ${expectedCurrency}, got ${amountMinor} ${currency}`);
       try {
