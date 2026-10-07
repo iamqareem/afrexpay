@@ -79,6 +79,7 @@
 
       <div class="tabs" role="tablist" aria-label="Dashboard sections" @keydown="tabKey($event)">
         <button type="button" class="tab" role="tab" data-tab="home" :aria-selected="tab === 'home'" :class="{active: tab === 'home'}" @click="setTab('home')">Home</button>
+        <button type="button" class="tab pos-tab" role="tab" data-tab="pos" :aria-selected="tab === 'pos'" :class="{active: tab === 'pos'}" @click="setTab('pos')" x-show="tabVisible('pos')">Point of Sale</button>
         <button type="button" class="tab" role="tab" data-tab="products" :aria-selected="tab === 'products'" :class="{active: tab === 'products'}" @click="setTab('products')" x-show="tabVisible('products')">Products</button>
         <button type="button" class="tab" role="tab" data-tab="services" :aria-selected="tab === 'services'" :class="{active: tab === 'services'}" @click="setTab('services')" x-show="tabVisible('services')">Services</button>
         <button type="button" class="tab" role="tab" data-tab="availability" :aria-selected="tab === 'availability'" :class="{active: tab === 'availability'}" @click="setTab('availability')" x-show="tabVisible('availability')">Availability</button>
@@ -488,6 +489,98 @@
           </div>
         </div>
 
+
+        <!-- POINT OF SALE -->
+        <div x-show="tab === 'pos'">
+          <div class="card">
+            <h3>New sale</h3>
+            <div class="field">
+              <label for="pos-search">Find products</label>
+              <input id="pos-search" x-model="posSearch" placeholder="Search SKU or name…" aria-label="Search products for sale" />
+            </div>
+            <table>
+              <thead><tr><th scope="col">Product</th><th scope="col">Price</th><th scope="col">In stock</th><th scope="col">Size</th><th scope="col"><span class="visually-hidden">Add</span></th></tr></thead>
+              <tbody x-show="!loading.products">
+                <template x-for="p in posMatches()" :key="p.id">
+                  <tr>
+                    <td data-label="Product" x-text="p.name"></td>
+                    <td data-label="Price" x-text="money(p.price_minor, p.currency)"></td>
+                    <td data-label="In stock" x-text="p.stock_qty === null ? '—' : p.stock_qty"></td>
+                    <td data-label="Size">
+                      <select :value="posPickedSize[p.id] || (p.sizes[0] || '')" @change="posPickedSize[p.id] = $event.target.value" :aria-label="'Size for ' + p.name">
+                        <template x-for="sz in (p.sizes || [])" :key="sz">
+                          <option :value="sz" x-text="sz"></option>
+                        </template>
+                      </select>
+                    </td>
+                    <td class="row-actions"><button @click="posAdd(p)">Add</button></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <p class="empty-state" x-show="!loading.products && posMatches().length === 0">No matching products — check the Products tab for stock.</p>
+          </div>
+
+          <div class="card">
+            <h3>Cart <span class="muted" x-show="posCart.length" x-text="'(' + posCartCount() + ' items)'"></span></h3>
+            <table x-show="posCart.length">
+              <thead><tr><th scope="col">Item</th><th scope="col">Qty</th><th scope="col">Total</th><th scope="col"><span class="visually-hidden">Remove</span></th></tr></thead>
+              <tbody>
+                <template x-for="(line, idx) in posCart" :key="line.productId + '|' + line.size">
+                  <tr>
+                    <td data-label="Item"><span x-text="line.name"></span> <span class="q-sub" x-text="line.size"></span></td>
+                    <td data-label="Qty">
+                      <button @click="posChangeQty(idx, -1)" aria-label="Decrease quantity">−</button>
+                      <span x-text="line.qty"></span>
+                      <button @click="posChangeQty(idx, 1)" aria-label="Increase quantity">+</button>
+                    </td>
+                    <td data-label="Total" x-text="money(line.priceMinor * line.qty, line.currency)"></td>
+                    <td class="row-actions"><button class="danger" @click="posRemove(idx)">Remove</button></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <p class="empty-state" x-show="!posCart.length">Cart is empty — add products above.</p>
+            <div class="field-grid" x-show="posCart.length">
+              <div class="field"><label for="pos-name">Customer name</label><input id="pos-name" x-model="posCustomer.name" autocomplete="off" /></div>
+              <div class="field"><label for="pos-phone">Phone</label><input id="pos-phone" x-model="posCustomer.phone" autocomplete="off" /></div>
+            </div>
+            <div class="field" x-show="posCart.length"><label for="pos-address">Address / notes</label><input id="pos-address" x-model="posCustomer.address" autocomplete="off" /></div>
+            <p class="stat-value" x-show="posCart.length">Total: <span x-text="posCartCurrency() + ' ' + posCartTotal().toLocaleString()"></span></p>
+            <p class="error-text" x-show="posError" x-text="posError"></p>
+            <div class="cluster" x-show="posCart.length">
+              <button class="btn" @click="posChargeCash()" :disabled="posBusy" x-text="posBusy ? 'Working…' : 'Charge cash'"></button>
+              <button class="btn ghost" @click="posCardQr()" :disabled="posBusy">Card: show QR</button>
+            </div>
+            <p class="hint" x-show="posCart.length">Card payments go through your enabled provider.</p>
+            <div class="field-grid" x-show="posCart.length" style="margin-top:0.75rem">
+              <div class="field"><label for="pos-tendered">Cash tendered (whole units)</label><input id="pos-tendered" type="number" x-model="posTendered" /></div>
+              <div class="field"><label for="pos-email">Customer email (for pay link)</label><input id="pos-email" type="email" x-model="posEmail" placeholder="customer@example.com" /></div>
+            </div>
+            <div class="cluster" x-show="posCart.length">
+              <button class="btn ghost" @click="posEmailLink()" :disabled="posBusy">Email pay link</button>
+            </div>
+          </div>
+
+          <div class="card" x-show="posPayQr">
+            <h3>Customer scans to pay</h3>
+            <div x-html="posPayQr" style="width:180px;height:180px" role="img" aria-label="Payment QR code"></div>
+            <p class="muted" x-text="posPollText"></p>
+            <p class="error-text" x-show="posError" x-text="posError"></p>
+          </div>
+
+          <div class="card" id="pos-receipt" x-show="posReceipt">
+            <h3>Receipt</h3>
+            <p><strong>Order</strong> <span x-text="posReceipt && posReceipt.id ? posReceipt.id.slice(0, 8) : ''"></span></p>
+            <p><strong>Total</strong> <span x-text="posReceipt ? money(posReceipt.totalMinor, posReceipt.currency) : ''"></span></p>
+            <p x-show="posReceipt && posReceipt.method === 'cash'"><strong>Change</strong> <span x-text="posReceipt ? money(posReceipt.changeMinor, posReceipt.currency) : ''"></span></p>
+            <p x-show="posReceipt && posReceipt.method !== 'cash'"><strong>Paid by</strong> <span x-text="posReceipt ? posReceipt.method : ''"></span></p>
+            <div class="cluster no-print">
+              <button class="btn" @click="window.print()">Print</button>
+              <button class="btn ghost" @click="posReset()">New sale</button>
+            </div>
+          </div>
+        </div>
 
         <!-- PRODUCTS -->
         <div x-show="tab === 'products'">

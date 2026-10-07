@@ -106,6 +106,23 @@ function adminApp() {
     editingListingId: null,
     listingError: "",
 
+    // point of sale (merchant-operated, owner only via authRequired)
+    posSearch: "",
+    posPickedSize: {},
+    posCart: [],
+    posCustomer: { name: "", phone: "", address: "" },
+    posTendered: "",
+    posEmail: "",
+    posOrder: null,
+    posPayQr: "",
+    posPollTimer: null,
+    posPolls: 0,
+    posPollText: "",
+    posLastProvider: null,
+    posReceipt: null,
+    posError: "",
+    posBusy: false,
+
     // inquiries
     inquiries: [],
 
@@ -146,11 +163,12 @@ function adminApp() {
     tabOrder() {
       // Only Home is global — store settings, payments and custom domain
       // live as sections inside it, so small screens never scroll sideways.
-      return ["home", "products", "services", "availability", "orders", "bookings", "listings", "inquiries", "reservations"]
+      return ["home", "pos", "products", "services", "availability", "orders", "bookings", "listings", "inquiries", "reservations"]
         .filter((t) => t === "home" || this.tabVisible(t));
     },
 
     setTab(name) {
+      if (name !== "pos") this.posClearPoll();
       // Vertical-specific tabs hide per store — never land on one that
       // isn't visible (stale activity links, hand-typed hashes). The
       // registry isn't loaded yet on first paint, so skip the check then;
@@ -166,7 +184,7 @@ function adminApp() {
       const m = (location.hash || "").match(/tab=([a-z-]+)/);
       // Legacy hashes (#tab=config|payments|domain) predate the merge —
       // they land on Home, where those sections live now.
-      const known = ["home", "products", "services", "availability", "orders", "bookings", "listings", "inquiries", "reservations"];
+      const known = ["home", "pos", "products", "services", "availability", "orders", "bookings", "listings", "inquiries", "reservations"];
       const legacy = ["config", "payments", "domain"];
       if (m && known.includes(m[1])) this.setTab(m[1]);
       else if (m && legacy.includes(m[1])) this.setTab("home");
@@ -331,6 +349,7 @@ function adminApp() {
     },
 
     async logout() {
+      this.posReset();
       await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
       // Clear everything session-shaped — previously services, bookings,
       // listings and friends survived logout and flashed stale on the
@@ -1412,6 +1431,257 @@ function adminApp() {
       const files = event.target.files;
       event.target.value = "";
       await this.uploadPhotoFiles(files, "listing", listingId);
+    },
+
+    // ---- point of sale ----
+    posMatches() {
+      const q = (this.posSearch || "").trim().toLowerCase();
+      const rows = !q ? this.products : this.products.filter((p) =>
+        String(p.sku || "").toLowerCase().includes(q) || String(p.name || "").toLowerCase().includes(q));
+      return rows.slice(0, 20);
+    },
+
+    posAdd(p) {
+      this.posError = "";
+      const size = this.posPickedSize[p.id] || (p.sizes || [])[0] || "";
+      const max = p.stock_qty === null || p.stock_qty === undefined ? Infinity : p.stock_qty;
+      const line = this.posCart.find((l) => l.productId === p.id && l.size === size);
+      if (line) {
+        if (line.qty + 1 > max) {
+          this.showToast(`Only ${max} in stock for ${p.name}.`, "error");
+          return;
+        }
+        line.qty += 1;
+      } else {
+        if (max < 1) {
+          this.showToast(`Out of stock: ${p.name}.`, "error");
+          return;
+        }
+        this.posCart.push({ productId: p.id, name: p.name, priceMinor: p.price_minor, currency: p.currency, size, qty: 1, stockQty: p.stock_qty });
+      }
+    },
+
+    posChangeQty(idx, delta) {
+      const line = this.posCart[idx];
+      if (!line) return;
+      const max = line.stockQty === null || line.stockQty === undefined ? Infinity : line.stockQty;
+      const next = line.qty + delta;
+      if (next <= 0) {
+        this.posCart.splice(idx, 1);
+      } else if (next > max) {
+        this.showToast(`Only ${max} in stock for ${line.name}.`, "error");
+      } else {
+        line.qty = next;
+      }
+    },
+
+    posRemove(idx) {
+      this.posCart.splice(idx, 1);
+    },
+
+    posCartCount() {
+      return this.posCart.reduce((n, l) => n + l.qty, 0);
+    },
+
+    posCartTotal() {
+      return this.posCart.reduce((n, l) => n + l.priceMinor * l.qty, 0);
+    },
+
+    posCartCurrency() {
+      return (this.posCart[0] && this.posCart[0].currency) || this.config.currency || "UGX";
+    },
+
+    posClearPoll() {
+      if (this.posPollTimer) {
+        clearInterval(this.posPollTimer);
+        this.posPollTimer = null;
+      }
+      this.posPolls = 0;
+      this.posPollText = "";
+    },
+
+    posReset() {
+      this.posClearPoll();
+      this.posCart = [];
+      this.posPickedSize = {};
+      this.posCustomer = { name: "", phone: "", address: "" };
+      this.posTendered = "";
+      this.posEmail = "";
+      this.posOrder = null;
+      this.posPayQr = "";
+      this.posLastProvider = null;
+      this.posReceipt = null;
+      this.posError = "";
+      this.posBusy = false;
+    },
+
+    async posEnsureOrder() {
+      if (this.posOrder) return this.posOrder;
+      if (!this.posCart.length) throw new Error("Cart is empty.");
+      const { name, phone, address } = this.posCustomer;
+      if (!name || !phone || !address) throw new Error("Customer name, phone and address are required.");
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          customerName: name, phone, address,
+          items: this.posCart.map((l) => ({ productId: l.productId, size: l.size, qty: l.qty })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 409) await this.loadProducts(); // stock moved under us
+        throw new Error(data.error || "Could not create order.");
+      }
+      this.posOrder = data;
+      return data;
+    },
+
+    async posChargeCash() {
+      this.posError = "";
+      if (!this.posCart.length) {
+        this.posError = "Cart is empty.";
+        return;
+      }
+      const tendered = Number(this.posTendered);
+      if (!Number.isInteger(tendered) || tendered < 0) {
+        this.posError = "Enter the cash tendered as a whole number.";
+        return;
+      }
+      this.posBusy = true;
+      try {
+        const order = await this.posEnsureOrder();
+        if (tendered < order.totalMinor) {
+          this.posError = `Tendered is short by ${this.money(order.totalMinor - tendered, order.currency)}.`;
+          return;
+        }
+        const res = await fetch(`/api/orders/${order.id}/collect-cash`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ tenderedMinor: tendered }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Could not collect payment.");
+        this.posReceipt = {
+          id: order.id, totalMinor: order.totalMinor, currency: order.currency,
+          method: "cash", changeMinor: data.changeMinor,
+        };
+        this.posPayQr = "";
+        await Promise.all([this.loadProducts(), this.loadOrders()]);
+        this.showToast("Cash sale recorded.");
+      } catch (err) {
+        this.posError = err.message;
+      } finally {
+        this.posBusy = false;
+      }
+    },
+
+    posEnabledProvider(preferred) {
+      const avail = [];
+      if (this.stripeStatus.enabled) avail.push("stripe");
+      if (this.paypalStatus.enabled) avail.push("paypal");
+      if (preferred && avail.includes(preferred)) return preferred;
+      return avail[0] || null;
+    },
+
+    async posCardQr() {
+      this.posError = "";
+      if (!this.posCart.length) {
+        this.posError = "Cart is empty.";
+        return;
+      }
+      const provider = this.posEnabledProvider("stripe");
+      if (!provider) {
+        this.posError = "Enable Stripe or PayPal in Store settings first.";
+        return;
+      }
+      this.posBusy = true;
+      this.posPayQr = "";
+      try {
+        const order = await this.posEnsureOrder();
+        const res = await fetch(`/api/orders/${order.id}/pay-link`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ provider }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Could not create pay link.");
+        this.posPayQr = data.qrSvg || "";
+        this.posLastProvider = provider;
+        this.posStartPoll(order.id);
+      } catch (err) {
+        this.posError = err.message;
+      } finally {
+        this.posBusy = false;
+      }
+    },
+
+    async posEmailLink() {
+      this.posError = "";
+      if (!this.posCart.length) {
+        this.posError = "Cart is empty.";
+        return;
+      }
+      if (!this.posEmail || !this.posEmail.includes("@")) {
+        this.posError = "Enter a valid customer email address.";
+        return;
+      }
+      const provider = this.posEnabledProvider("stripe");
+      if (!provider) {
+        this.posError = "Enable Stripe or PayPal in Store settings first.";
+        return;
+      }
+      this.posBusy = true;
+      try {
+        const order = await this.posEnsureOrder();
+        const res = await fetch(`/api/orders/${order.id}/pay-link`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ provider, email: this.posEmail.trim() }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Could not send pay link.");
+        this.showToast(`Pay link sent to ${this.posEmail.trim()}.`);
+        this.posLastProvider = provider;
+        this.posStartPoll(order.id);
+      } catch (err) {
+        this.posError = err.message;
+      } finally {
+        this.posBusy = false;
+      }
+    },
+
+    posStartPoll(orderId) {
+      this.posClearPoll();
+      this.posPollText = "Waiting for payment…";
+      this.posPollTimer = setInterval(async () => {
+        this.posPolls += 1;
+        try {
+          const res = await fetch(`/api/orders/${orderId}/status`, { credentials: "same-origin" });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.payment_status === "paid") {
+              this.posClearPoll();
+              this.posReceipt = {
+                id: orderId, totalMinor: data.total_minor, currency: data.currency,
+                method: this.posLastProvider || "card",
+              };
+              this.posPayQr = "";
+              await Promise.all([this.loadProducts(), this.loadOrders()]);
+              this.showToast("Payment received.");
+              return;
+            }
+          }
+        } catch { /* keep polling */ }
+        if (this.posPolls >= 40) {
+          this.posClearPoll();
+          this.posPollText = "Still waiting — the customer can keep paying; this view stopped checking.";
+        }
+      }, 3000);
     },
 
     // ---- inquiries ----

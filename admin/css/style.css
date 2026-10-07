@@ -445,8 +445,20 @@ html[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
   top: 0;
   z-index: 30;
 }
+.tab.pos-tab {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-radius: 999px;
+  padding: 0.45rem 1.1rem;
+  margin: 0.4rem 0.25rem 0.4rem 0;
+  border-bottom: none;
+  align-self: center;
+}
+.tab.pos-tab.active {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .tab {
-  background: none;
   border: none;
   border-bottom: 2px solid transparent;
   font: inherit;
@@ -799,4 +811,26 @@ html[data-theme="dark"] .theme-card.active .theme-select-btn { color: #000000; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
   .toast, .skel { animation: none; }
+}
+
+/* ---- point of sale ---- */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #pos-receipt,
+  #pos-receipt * {
+    visibility: visible;
+  }
+  #pos-receipt {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    border: none;
+    box-shadow: none;
+  }
+  #pos-receipt .no-print {
+    display: none;
+  }
 }

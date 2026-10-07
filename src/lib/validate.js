@@ -35,4 +35,8 @@ function isDayOfWeek(n) {
   return Number.isInteger(n) && n >= 0 && n <= 6;
 }
 
-module.exports = { UUID_RE, isValidDate, isValidTime, isEndAfterStart, isDayOfWeek };
+// Pragmatic address format (not RFC-complete on purpose): catches typos
+// and junk like "foo" while never rejecting a real address.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+module.exports = { UUID_RE, EMAIL_RE, isValidDate, isValidTime, isEndAfterStart, isDayOfWeek };

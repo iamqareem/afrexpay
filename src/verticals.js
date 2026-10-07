@@ -81,7 +81,7 @@ const THEMES_REGISTRY = {
 const VERTICALS = {
   products: {
     label: "Physical products",
-    dashboardTabs: ["products", "orders"],
+    dashboardTabs: ["products", "orders", "pos"],
     compatibleThemes: ["hangtag", "electronics", "yeezy", "backmarket", "automobile", "souk"],
   },
   services: {

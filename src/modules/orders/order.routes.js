@@ -2,7 +2,10 @@
 const express = require("express");
 const authRequired = require("../../middleware/auth-required");
 const { publicWriteLimiter } = require("../../middleware/rate-limits");
-const { createOrder, listOrders, getOrderPaymentStatus, startOrderCheckout, updateOrderStatus, ORDER_STATUSES } = require("./order.service");
+const { createOrder, listOrders, getOrderPaymentStatus, startOrderCheckout, markOrderCashPaid, markOrderChannel, updateOrderStatus, ORDER_STATUSES } = require("./order.service");
+const QRCode = require("qrcode");
+const { EMAIL_RE } = require("../../lib/validate");
+const { sendCheckoutLinkEmail } = require("../../lib/mailer");
 const { getConfig } = require("../store-config/config.service");
 const { notifyNewOrder } = require("../notify-matrix/matrix.service");
 const { assertSafeCheckoutRedirects } = require("../../lib/checkout-redirects");
@@ -71,6 +74,80 @@ router.get("/", authRequired, async (req, res) => {
   }
   const orders = await listOrders(req.tenant.id, req.query);
   res.json(orders);
+});
+
+// POS cash tender (owner-operated): collect offline money for an open
+// order. No provider involved — the ledger records provider 'cash'.
+router.post("/:id/collect-cash", authRequired, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(404).json({ error: "Order not found." });
+  }
+  const { tenderedMinor } = req.body || {};
+  try {
+    const result = await markOrderCashPaid(req.tenant.id, req.params.id, { tenderedMinor });
+    if (!result) {
+      return res.status(400).json({ error: "Order cannot be collected (already paid, cancelled, or missing)." });
+    }
+    // Same merchant ping as paid webhooks.
+    getConfig(req.tenant.id)
+      .then(({ config }) =>
+        notifyNewOrder(config?.matrixRoomId, req.tenant.business_name, {
+          id: result.order.id,
+          customerName: result.order.customer_name,
+          phone: result.order.phone,
+          address: result.order.address,
+          totalMinor: result.order.total_minor,
+          currency: result.order.currency,
+          items: [{ name: "POS sale (cash)", size: "—", qty: 1, unitPriceMinor: result.order.total_minor }],
+        })
+      )
+      .catch((err) => console.error("Could not load config for Matrix notification:", err.message));
+    res.json({ id: result.order.id, payment_status: "paid", changeMinor: result.changeMinor });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.status ? err.message : "Could not collect payment." });
+  }
+});
+
+// POS card tender: mint a provider session and either hand back its QR
+// (customer scans on their own phone) or email the pay link. Reuses the
+// storefront checkout machinery — no new money code, same webhook confirm.
+router.post("/:id/pay-link", authRequired, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(404).json({ error: "Order not found." });
+  }
+  const { provider = "stripe", email } = req.body || {};
+  const cleanEmail = email === undefined || email === null ? null : String(email).trim();
+  if (cleanEmail && !EMAIL_RE.test(cleanEmail)) {
+    return res.status(400).json({ error: "Enter a valid customer email address." });
+  }
+  try {
+    // Return URLs point back at this same admin hatch (a tenant host, so
+    // the allowlist holds); truth still comes from polling /:id/status.
+    const host = String(req.headers.host || "").split(":")[0];
+    const here = `https://${host}/admin/`;
+    const successUrl = `${here}#tab=pos&order=${req.params.id}&paid=1`;
+    const cancelUrl = `${here}#tab=pos&order=${req.params.id}`;
+    assertSafeCheckoutRedirects(successUrl, cancelUrl, req.tenant);
+    const { checkoutUrl } = await startOrderCheckout(req.tenant.id, req.params.id, {
+      successUrl, cancelUrl, provider,
+    });
+    await markOrderChannel(req.tenant.id, req.params.id, "pos");
+    if (cleanEmail) {
+      const order = (await getOrderPaymentStatus(req.tenant.id, req.params.id)) || {};
+      await sendCheckoutLinkEmail({
+        to: cleanEmail,
+        storeName: req.tenant.business_name,
+        orderId: req.params.id,
+        amountText: `${order.currency || ""} ${(order.total_minor ?? 0).toLocaleString()}`,
+        checkoutUrl,
+      });
+      return res.json({ checkoutUrl, emailed: true });
+    }
+    const qrSvg = await QRCode.toString(checkoutUrl, { type: "svg", margin: 1, width: 256 });
+    res.json({ checkoutUrl, qrSvg });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.status ? err.message : "Could not create pay link." });
+  }
 });
 
 router.patch("/:id", authRequired, async (req, res) => {

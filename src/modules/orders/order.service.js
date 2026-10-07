@@ -255,8 +255,73 @@ async function markOrderPaid(tenantId, sessionId, amountMinor, currency, provide
 // payment_status). Ids are unguessable UUIDs, tenant-scoped.
 async function getOrderPaymentStatus(tenantId, orderId) {
   const { rows } = await pool.query(
-    `SELECT id, status, payment_status FROM orders WHERE tenant_id = $1 AND id = $2`,
+    `SELECT id, status, payment_status, total_minor, currency FROM orders WHERE tenant_id = $1 AND id = $2`,
     [tenantId, orderId]
+  );
+  return rows[0] || null;
+}
+
+// POS cash tender: offline money (cash, mobile money handed over) for an
+// order that is still open. Same guards as the webhook path (pending-only,
+// terminal states refuse, double-collect hits zero rows) plus tendered
+// coverage — the ledger always records the ORDER total, never the tendered
+// amount, so change handling can't drift revenue. Returns { order, changeMinor }.
+async function markOrderCashPaid(tenantId, orderId, { tenderedMinor }) {
+  const existing = await pool.query(
+    `SELECT id, status, payment_status, total_minor FROM orders WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, orderId]
+  );
+  const found = existing.rows[0];
+  if (!found) return null;
+  if (found.status === "cancelled" || found.status === "fulfilled" || found.payment_status === "paid") {
+    throw Object.assign(new Error("This order can no longer be collected."), { status: 400 });
+  }
+  if (!Number.isInteger(tenderedMinor) || tenderedMinor < found.total_minor) {
+    throw Object.assign(new Error("Tendered amount must cover the order total."), { status: 400 });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(
+      `UPDATE orders SET payment_status = 'paid', status = 'confirmed', channel = 'pos'
+       WHERE tenant_id = $1 AND id = $2 AND payment_status IN ('pending', 'unpaid') AND status NOT IN ('cancelled', 'fulfilled')
+       RETURNING *`,
+      [tenantId, orderId]
+    );
+    const order = rows[0];
+    if (!order) {
+      await client.query("ROLLBACK");
+      return null; // lost a race (double-collect, concurrent cancel)
+    }
+    // One cash collection per order by construction: provider_reference
+    // `cash:<id>` collides on retry, and the partial UNIQUE on succeeded
+    // rows turns that into a safe null via the catch below.
+    await client.query(
+      `INSERT INTO payments (tenant_id, entity_type, entity_id, provider, provider_reference, amount_minor, currency, status)
+       VALUES ($1, 'order', $2, 'cash', $3, $4, $5, 'succeeded')`,
+      [tenantId, order.id, `cash:${order.id}`, order.total_minor, order.currency]
+    );
+    await client.query("COMMIT");
+    return { order, changeMinor: tenderedMinor - order.total_minor };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    if (err.code === "23505") return null;
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Marks a POS-originated order's channel at link/collection time. The
+// webhook path never touches channel, so storefront sales keep theirs.
+async function markOrderChannel(tenantId, orderId, channel) {
+  if (!["storefront", "pos"].includes(channel)) {
+    throw Object.assign(new Error("Unknown order channel."), { status: 400 });
+  }
+  const { rows } = await pool.query(
+    `UPDATE orders SET channel = $3 WHERE tenant_id = $1 AND id = $2 RETURNING id`,
+    [tenantId, orderId, channel]
   );
   return rows[0] || null;
 }
@@ -323,4 +388,4 @@ async function releaseAbandonedOrders(db = pool, { olderThanMinutes = 1440 } = {
   return rows[0];
 }
 
-module.exports = { createOrder, listOrders, getOrderPaymentStatus, startOrderCheckout, markOrderPaid, updateOrderStatus, releaseAbandonedOrders, ORDER_STATUSES };
+module.exports = { createOrder, listOrders, getOrderPaymentStatus, startOrderCheckout, markOrderPaid, markOrderCashPaid, markOrderChannel, updateOrderStatus, releaseAbandonedOrders, ORDER_STATUSES };

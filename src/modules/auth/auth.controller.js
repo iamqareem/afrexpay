@@ -4,9 +4,7 @@ const { sendResetEmail } = require("./reset-email");
 const { invalidateTenantCache, extractSubdomain } = require("../../middleware/tenant-resolver");
 
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$/;
-// Pragmatic format check (not RFC-complete on purpose): catches typos and
-// junk like "foo" while never rejecting a real address.
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Single source: src/lib/validate.js (re-exported here for compat).
 const BASE_DOMAIN = process.env.BASE_DOMAIN || "afrexpay.com";
 
 // Words that would collide with the platform itself, look official, or are
@@ -67,6 +65,7 @@ async function sessionStatus(req, res) {
   }
 }
 
+const { EMAIL_RE } = require("../../lib/validate");
 const { VALID_VERTICALS, isThemeCompatible } = require("../../verticals");
 const { validatePassword } = require("../../lib/password-validator");
 
