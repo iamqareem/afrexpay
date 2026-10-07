@@ -1,5 +1,8 @@
 # CI — every push to main and every pull request.
 # Tests are DB-free by design, so no Postgres service is needed.
+# Intentionally thin: ALL logic lives in scripts/ci.sh (provider-agnostic).
+# If GitHub ever gates compute, port the ~15 lines below to another
+# runner (see docs/ci-porting.md) — nothing is re-implemented.
 name: ci
 
 on:
@@ -18,29 +21,4 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
-
-      - name: Unit tests
-        run: npm test
-
-      - name: Syntax check (backend + admin + landing JS)
-        run: |
-          for f in $(git ls-files 'src/**/*.js' 'admin/js/**/*.js' 'public/js/**/*.js'); do
-            node --check "$f" || exit 1
-          done
-
-      - name: Theme CSS exists
-        run: |
-          missing=0
-          for d in themes/*/; do
-            if [ ! -f "${d}css/style.css" ]; then echo "Missing ${d}css/style.css"; missing=1; fi
-          done
-          if [ $missing -ne 0 ]; then echo "Theme CSS missing — run npm run build:css in each theme"; exit 1; fi
-
-  compose:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Validate Postgres compose file (only the db runs containerized)
-        run: docker compose config > /dev/null
+      - run: ./scripts/ci.sh
