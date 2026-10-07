@@ -1,6 +1,7 @@
 // src/modules/products/product.service.js
 const pool = require("../../db/pool");
 const { parseListParams, searchCondition } = require("../../lib/list-query");
+const { getTenantCurrency } = require("../store-config/config.service");
 
 async function listProducts(tenantId, params = {}) {
   const { search, limit, offset, dir } = parseListParams(params, { defaultDir: "ASC" });
@@ -26,7 +27,10 @@ async function getProduct(tenantId, productId) {
 }
 
 async function createProduct(tenantId, data) {
-  const { sku, name, category, priceMinor, currency, sizes, stockQty, blurb } = data;
+  const { sku, name, category, priceMinor, sizes, stockQty, blurb } = data;
+  // Explicit client currency wins (route-whitelisted); otherwise the row
+  // inherits the store's configured currency instead of hardcoded UGX.
+  const currency = data.currency || (await getTenantCurrency(tenantId));
   const { rows } = await pool.query(
     `INSERT INTO products (tenant_id, sku, name, category, price_minor, currency, sizes, stock_qty, blurb)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)

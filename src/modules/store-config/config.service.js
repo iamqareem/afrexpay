@@ -93,4 +93,20 @@ async function setMatrixRoomIfUnset(tenantId, roomId) {
   return { roomId: current.config?.matrixRoomId || null, created: false };
 }
 
-module.exports = { getConfig, updateConfig, setThemeSlug, deepMergeConfig, setMatrixRoomIfUnset };
+// The store's configured currency (UGX/KES/TZS/USD in the dashboard).
+// Catalog creates default to this instead of hardcoded "UGX" — otherwise
+// every row is born UGX and switching settings visibly does nothing.
+async function getTenantCurrency(tenantId) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT config->>'currency' AS currency FROM store_configs WHERE tenant_id = $1`,
+      [tenantId]
+    );
+    const code = String(rows[0]?.currency || "UGX").toUpperCase();
+    return /^[A-Z]{3}$/.test(code) ? code : "UGX";
+  } catch {
+    return "UGX";
+  }
+}
+
+module.exports = { getConfig, updateConfig, setThemeSlug, deepMergeConfig, setMatrixRoomIfUnset, getTenantCurrency };

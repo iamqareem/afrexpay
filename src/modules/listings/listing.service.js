@@ -1,6 +1,7 @@
 // src/modules/listings/listing.service.js
 const pool = require("../../db/pool");
 const { parseListParams, searchCondition } = require("../../lib/list-query");
+const { getTenantCurrency } = require("../store-config/config.service");
 
 async function listListings(tenantId, params = {}) {
   // Pulls one thumbnail per listing (lowest sort_order, tiebreak by
@@ -35,7 +36,8 @@ async function getListing(tenantId, listingId) {
 }
 
 async function createListing(tenantId, data) {
-  const { title, description, listingType, priceMinor, currency, bedrooms, bathrooms, areaSqm, location, depositAmountMinor } = data;
+  const { title, description, listingType, priceMinor, bedrooms, bathrooms, areaSqm, location, depositAmountMinor } = data;
+  const currency = data.currency || (await getTenantCurrency(tenantId));
   const { rows } = await pool.query(
     `INSERT INTO listings (tenant_id, title, description, listing_type, price_minor, currency, bedrooms, bathrooms, area_sqm, location, deposit_amount_minor)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,

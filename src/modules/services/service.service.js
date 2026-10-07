@@ -2,6 +2,7 @@
 const pool = require("../../db/pool");
 const { parseListParams, searchCondition } = require("../../lib/list-query");
 const { createResource } = require("./resource.service");
+const { getTenantCurrency } = require("../store-config/config.service");
 
 async function listServices(tenantId, params = {}) {
   const { search, limit, offset, dir } = parseListParams(params, { defaultDir: "ASC" });
@@ -24,7 +25,8 @@ async function getService(tenantId, serviceId) {
 }
 
 async function createService(tenantId, data) {
-  const { name, description, durationMinutes, priceMinor, currency } = data;
+  const { name, description, durationMinutes, priceMinor } = data;
+  const currency = data.currency || (await getTenantCurrency(tenantId));
   const { rows } = await pool.query(
     `INSERT INTO services (tenant_id, name, description, duration_minutes, price_minor, currency)
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
