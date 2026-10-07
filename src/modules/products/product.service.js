@@ -9,9 +9,19 @@ async function listProducts(tenantId, params = {}) {
   const values = [tenantId];
   if (search) conditions.push(searchCondition(values, ["sku", "name", "category"], search));
   values.push(limit, offset);
+  // Cover thumbnail per product (lowest sort_order wins), same lateral
+  // pattern as listings — one query, no N+1 photo fetches for grids.
   const { rows } = await pool.query(
-    `SELECT id, sku, name, category, price_minor, currency, sizes, stock_qty, blurb
-     FROM products WHERE ${conditions.join(" AND ")} ORDER BY created_at ${dir}
+    `SELECT p.id, p.sku, p.name, p.category, p.price_minor, p.currency, p.sizes, p.stock_qty, p.blurb,
+            m.storage_path AS thumbnail_path
+     FROM products p
+     LEFT JOIN LATERAL (
+       SELECT storage_path FROM media
+       WHERE tenant_id = p.tenant_id AND entity_type = 'product' AND entity_id = p.id
+       ORDER BY sort_order ASC, created_at ASC
+       LIMIT 1
+     ) m ON true
+     WHERE ${conditions.join(" AND ").replace("tenant_id", "p.tenant_id")} ORDER BY p.created_at ${dir}
      LIMIT $${values.length - 1} OFFSET $${values.length}`,
     values
   );

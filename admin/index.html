@@ -495,29 +495,32 @@
           <div class="card">
             <h3>New sale</h3>
             <div class="field">
-              <label for="pos-search">Find products</label>
+              <label for="pos-search">Find products — tap a card to add it</label>
               <input id="pos-search" x-model="posSearch" placeholder="Search SKU or name…" aria-label="Search products for sale" />
             </div>
-            <table>
-              <thead><tr><th scope="col">Product</th><th scope="col">Price</th><th scope="col">In stock</th><th scope="col">Size</th><th scope="col"><span class="visually-hidden">Add</span></th></tr></thead>
-              <tbody x-show="!loading.products">
-                <template x-for="p in posMatches()" :key="p.id">
-                  <tr>
-                    <td data-label="Product" x-text="p.name"></td>
-                    <td data-label="Price" x-text="money(p.price_minor, p.currency)"></td>
-                    <td data-label="In stock" x-text="p.stock_qty === null ? '—' : p.stock_qty"></td>
-                    <td data-label="Size">
-                      <select :value="posPickedSize[p.id] || (p.sizes[0] || '')" @change="posPickedSize[p.id] = $event.target.value" :aria-label="'Size for ' + p.name">
-                        <template x-for="sz in (p.sizes || [])" :key="sz">
-                          <option :value="sz" x-text="sz"></option>
-                        </template>
-                      </select>
-                    </td>
-                    <td class="row-actions"><button @click="posAdd(p)">Add</button></td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
+            <div class="pos-cats" role="group" aria-label="Filter by category">
+              <button type="button" class="chip" :class="{active: !posCategory}" @click="posCategory = ''">All</button>
+              <template x-for="c in posCategories()" :key="c">
+                <button type="button" class="chip" :class="{active: posCategory === c}" @click="posCategory = (posCategory === c ? '' : c)" x-text="c"></button>
+              </template>
+            </div>
+            <div class="pos-grid" x-show="!loading.products">
+              <template x-for="p in posMatches()" :key="p.id">
+                <button type="button" class="pos-card" @click="posAdd(p)" :disabled="p.stock_qty === 0" :aria-label="'Add ' + p.name">
+                  <span class="pos-photo">
+                    <template x-if="p.thumbnail_path">
+                      <img :src="'/media/' + p.thumbnail_path" :alt="p.name" loading="lazy" />
+                    </template>
+                    <template x-if="!p.thumbnail_path">
+                      <span class="pos-photo-fallback" x-text="(p.name || '?').slice(0, 1).toUpperCase()"></span>
+                    </template>
+                  </span>
+                  <strong class="pos-name" x-text="p.name"></strong>
+                  <span class="pos-price" x-text="money(p.price_minor, p.currency)"></span>
+                  <span class="badge" x-show="p.stock_qty !== null && p.stock_qty !== undefined" :class="{low: p.stock_qty === 0}" x-text="p.stock_qty > 0 ? p.stock_qty + ' left' : 'Out of stock'"></span>
+                </button>
+              </template>
+            </div>
             <p class="empty-state" x-show="!loading.products && posMatches().length === 0">No matching products — check the Products tab for stock.</p>
           </div>
 
@@ -528,7 +531,13 @@
               <tbody>
                 <template x-for="(line, idx) in posCart" :key="line.productId + '|' + line.size">
                   <tr>
-                    <td data-label="Item"><span x-text="line.name"></span> <span class="q-sub" x-text="line.size"></span></td>
+                    <td data-label="Item"><span x-text="line.name"></span>
+                      <select :value="line.size" @change="posChangeLineSize(idx, $event.target.value)" :aria-label="'Size for ' + line.name">
+                        <template x-for="sz in (line.sizes || [])" :key="sz">
+                          <option :value="sz" x-text="sz"></option>
+                        </template>
+                      </select>
+                    </td>
                     <td data-label="Qty">
                       <button @click="posChangeQty(idx, -1)" aria-label="Decrease quantity">−</button>
                       <span x-text="line.qty"></span>

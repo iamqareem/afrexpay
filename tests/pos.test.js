@@ -154,3 +154,23 @@ test("posEnabledProvider prefers Stripe, falls back, or reports none", () => {
   assert.strictEqual(a.posEnabledProvider("paypal"), "paypal");
   assert.strictEqual(a.posEnabledProvider("stripe"), "stripe");
 });
+
+test("product list pulls cover thumbnails in one query", async () => {
+  const productService = require("../src/modules/products/product.service");
+  const seen = [];
+  const original = pool.query;
+  pool.query = async (text, values) => {
+    seen.push({ text, values });
+    return { rows: [] };
+  };
+  try {
+    await productService.listProducts("t1", {});
+    const q = seen[0].text;
+    assert.match(q, /LEFT JOIN LATERAL/, "must join thumbnails laterally");
+    assert.match(q, /thumbnail_path/, "must project the cover path");
+    assert.match(q, /ORDER BY sort_order ASC/, "cover = lowest sort order");
+    assert.strictEqual(seen.length, 1, "single query, no N+1");
+  } finally {
+    pool.query = original;
+  }
+});

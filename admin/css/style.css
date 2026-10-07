@@ -852,3 +852,87 @@ html[data-theme="dark"] .theme-card.active .theme-select-btn { color: #000000; }
     display: none;
   }
 }
+
+/* ---- point of sale cards ---- */
+.pos-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
+}
+.chip {
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.chip.active {
+  background: var(--text);
+  color: var(--panel);
+  border-color: var(--text);
+}
+.pos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.9rem;
+}
+.pos-card {
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: flex-start;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.7rem;
+  cursor: pointer;
+}
+.pos-card:hover:not(:disabled) {
+  border-color: var(--text);
+}
+.pos-card:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.pos-photo {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel2);
+}
+.pos-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.pos-photo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.pos-name {
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+.pos-price {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.badge.low {
+  opacity: 0.75;
+}

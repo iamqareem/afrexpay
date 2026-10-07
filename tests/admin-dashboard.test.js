@@ -157,3 +157,25 @@ test("retryBootstrap re-arms skeletons and re-latches while broken", async () =>
     global.fetch = originalFetch;
   }
 });
+test("POS category filter and line-size merge", () => {
+  const { adminApp } = require("../admin/js/app.js");
+  const a = adminApp();
+  a.products = [
+    { id: "p1", name: "Shirt", category: "Wear", price_minor: 5, currency: "UGX", sizes: ["S", "M"], stock_qty: 10 },
+    { id: "p2", name: "Mug", category: null, price_minor: 3, currency: "UGX", sizes: ["One"], stock_qty: null },
+  ];
+  assert.deepStrictEqual(a.posCategories(), ["Wear"]);
+  assert.strictEqual(a.posMatches().length, 2);
+  a.posCategory = "Wear";
+  assert.strictEqual(a.posMatches().length, 1);
+
+  a.posPickedSize = { p1: "S" };
+  a.posAdd(a.products[0]);
+  a.posPickedSize = { p1: "M" };
+  a.posAdd(a.products[0]);
+  assert.strictEqual(a.posCart.length, 2, "different sizes stay separate lines");
+  a.posChangeLineSize(1, "S");
+  assert.strictEqual(a.posCart.length, 1, "same size folds together");
+  assert.strictEqual(a.posCart[0].qty, 2);
+  assert.deepStrictEqual(a.posCart[0].sizes, ["S", "M"]);
+});

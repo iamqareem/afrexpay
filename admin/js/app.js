@@ -108,6 +108,7 @@ function adminApp() {
 
     // point of sale (merchant-operated, owner only via authRequired)
     posSearch: "",
+    posCategory: "",
     posPickedSize: {},
     posCart: [],
     posCustomer: { name: "", phone: "", address: "" },
@@ -1434,11 +1435,20 @@ function adminApp() {
     },
 
     // ---- point of sale ----
+    posCategories() {
+      const cats = new Set();
+      for (const p of this.products) {
+        if (p.category) cats.add(p.category);
+      }
+      return [...cats].sort((a, b) => String(a).localeCompare(String(b)));
+    },
+
     posMatches() {
       const q = (this.posSearch || "").trim().toLowerCase();
-      const rows = !q ? this.products : this.products.filter((p) =>
-        String(p.sku || "").toLowerCase().includes(q) || String(p.name || "").toLowerCase().includes(q));
-      return rows.slice(0, 20);
+      const rows = this.products.filter((p) =>
+        (!this.posCategory || p.category === this.posCategory) &&
+        (!q || String(p.sku || "").toLowerCase().includes(q) || String(p.name || "").toLowerCase().includes(q)));
+      return rows.slice(0, 60);
     },
 
     posAdd(p) {
@@ -1457,7 +1467,7 @@ function adminApp() {
           this.showToast(`Out of stock: ${p.name}.`, "error");
           return;
         }
-        this.posCart.push({ productId: p.id, name: p.name, priceMinor: p.price_minor, currency: p.currency, size, qty: 1, stockQty: p.stock_qty });
+        this.posCart.push({ productId: p.id, name: p.name, priceMinor: p.price_minor, currency: p.currency, size, sizes: [...(p.sizes || [])], qty: 1, stockQty: p.stock_qty });
       }
     },
 
@@ -1477,6 +1487,19 @@ function adminApp() {
 
     posRemove(idx) {
       this.posCart.splice(idx, 1);
+    },
+
+    posChangeLineSize(idx, size) {
+      const line = this.posCart[idx];
+      if (!line || line.size === size) return;
+      line.size = size;
+      // Fold into a same product+size line if one exists (stock-capped).
+      const dup = this.posCart.findIndex((l, i) => i !== idx && l.productId === line.productId && l.size === size);
+      if (dup !== -1) {
+        const max = line.stockQty === null || line.stockQty === undefined ? Infinity : line.stockQty;
+        this.posCart[dup].qty = Math.min(this.posCart[dup].qty + line.qty, max);
+        this.posCart.splice(idx, 1);
+      }
     },
 
     posCartCount() {
@@ -1504,6 +1527,7 @@ function adminApp() {
       this.posClearPoll();
       this.posCart = [];
       this.posPickedSize = {};
+      this.posCategory = "";
       this.posCustomer = { name: "", phone: "", address: "" };
       this.posTendered = "";
       this.posEmail = "";
