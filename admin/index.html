@@ -79,9 +79,6 @@
 
       <div class="tabs" role="tablist" aria-label="Dashboard sections" @keydown="tabKey($event)">
         <button type="button" class="tab" role="tab" data-tab="home" :aria-selected="tab === 'home'" :class="{active: tab === 'home'}" @click="setTab('home')">Home</button>
-        <button type="button" class="tab" role="tab" data-tab="config" :aria-selected="tab === 'config'" :class="{active: tab === 'config'}" @click="setTab('config')">Store Settings</button>
-        <button type="button" class="tab" role="tab" data-tab="payments" :aria-selected="tab === 'payments'" :class="{active: tab === 'payments'}" @click="setTab('payments')">Payments</button>
-        <button type="button" class="tab" role="tab" data-tab="domain" :aria-selected="tab === 'domain'" :class="{active: tab === 'domain'}" @click="setTab('domain')">Custom Domain</button>
         <button type="button" class="tab" role="tab" data-tab="products" :aria-selected="tab === 'products'" :class="{active: tab === 'products'}" @click="setTab('products')" x-show="tabVisible('products')">Products</button>
         <button type="button" class="tab" role="tab" data-tab="services" :aria-selected="tab === 'services'" :class="{active: tab === 'services'}" @click="setTab('services')" x-show="tabVisible('services')">Services</button>
         <button type="button" class="tab" role="tab" data-tab="availability" :aria-selected="tab === 'availability'" :class="{active: tab === 'availability'}" @click="setTab('availability')" x-show="tabVisible('availability')">Availability</button>
@@ -168,6 +165,24 @@
               </template>
             </div>
 
+            <div class="card" x-show="!loading.qr || storeQr.svg">
+              <h3>Share your store</h3>
+              <div x-show="loading.qr && !storeQr.svg">
+                <span class="skel" style="width:120px;height:120px;display:block"></span>
+              </div>
+              <div x-show="storeQr.svg" class="cluster" style="align-items:center">
+                <div x-html="storeQr.svg" style="width:120px;height:120px" role="img" aria-label="Store QR code"></div>
+                <div class="flex-1">
+                  <p class="muted" style="word-break:break-all" x-text="storeQr.url"></p>
+                  <div class="cluster">
+                    <button class="btn" @click="copyStoreLink()">Copy link</button>
+                    <button class="btn ghost" @click="downloadStoreQr()">Download QR</button>
+                  </div>
+                </div>
+              </div>
+              <p class="error-text" x-show="qrError && !storeQr.svg" x-text="qrError"></p>
+            </div>
+
             <template x-if="tabVisible('orders') && homeFulfillment().length">
               <div class="card">
                 <h3>Needs fulfillment</h3>
@@ -241,11 +256,16 @@
                 </ul>
               </div>
             </template>
-          </div>
-        </div>
 
-        <!-- STORE SETTINGS -->
-        <div x-show="tab === 'config'">
+            <div class="card">
+              <h3>Settings</h3>
+              <div class="cluster">
+                <button type="button" class="link-btn" @click="scrollToId('store-settings')">Store</button>
+                <button type="button" class="link-btn" @click="scrollToId('store-payments')">Payments</button>
+                <button type="button" class="link-btn" @click="scrollToId('store-domain')">Custom domain</button>
+              </div>
+            </div>
+            <h3 id="store-settings">Store settings</h3>
           <div class="card">
             <div class="field">
               <label>What does your store sell?</label>
@@ -331,7 +351,142 @@
             </div>
             <button class="btn" @click="saveConfig" :disabled="configSaving" x-text="configSaving ? 'Saving...' : 'Save settings'"></button>
           </div>
+            <h3 id="store-payments">Payments</h3>
+          <div class="card">
+            <h3 style="margin-top:0;">Stripe</h3>
+            <p class="hint" style="margin-top:0;">Paste your Stripe API keys here. Get them from your Stripe Dashboard → Developers → API keys.</p>
+            <div class="field-grid">
+              <div class="field"><label for="stripe-pk">Publishable key</label><input id="stripe-pk" x-model="stripeForm.publishableKey" placeholder="pk_test_..." /></div>
+              <div class="field"><label for="stripe-sk">Secret key</label><input id="stripe-sk" type="password" x-model="stripeForm.secretKey" :placeholder="stripeStatus.has_secret_key ? 'Already set — leave blank to keep it' : 'sk_test_...'" /></div>
+            </div>
+            <div class="field-grid">
+              <div class="field"><label for="stripe-whsec">Webhook signing secret</label><input id="stripe-whsec" type="password" x-model="stripeForm.webhookSecret" :placeholder="stripeStatus.has_webhook_secret ? 'Already set — leave blank to keep it' : 'whsec_...'" /></div>
+              <div class="field"><label for="stripe-mode">Mode</label>
+                <select id="stripe-mode" x-model="stripeForm.mode">
+                  <option value="test">Test</option>
+                  <option value="live">Live</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="stripe-webhook-url">Your webhook URL (paste this into your Stripe Dashboard → Developers → Webhooks)</label>
+              <input id="stripe-webhook-url" readonly :value="stripeStatus.webhookUrl" onclick="this.select()" />
+            </div>
+            <div class="cluster">
+              <button class="btn" @click="saveStripeCredentials(true)" :disabled="stripeSaving">Save &amp; enable</button>
+              <button class="btn ghost" @click="saveStripeCredentials(false)" :disabled="stripeSaving">Save without enabling</button>
+              <span class="badge" :class="stripeStatus.enabled ? 'confirmed' : 'pending'" x-text="stripeStatus.enabled ? 'Enabled' : 'Not enabled'"></span>
+            </div>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0;">PayPal</h3>
+            <p class="hint" style="margin-top:0;">Paste your PayPal REST app credentials here. Get them from your PayPal Dashboard → Apps &amp; Credentials.</p>
+            <div class="field-grid">
+              <div class="field"><label for="paypal-pk">Client ID</label><input id="paypal-pk" x-model="paypalForm.publishableKey" placeholder="AY…" /></div>
+              <div class="field"><label for="paypal-sk">Secret</label><input id="paypal-sk" type="password" x-model="paypalForm.secretKey" :placeholder="paypalStatus.has_secret_key ? 'Already set — leave blank to keep it' : 'EO…'" /></div>
+            </div>
+            <div class="field-grid">
+              <div class="field"><label for="paypal-whsec">Webhook ID</label><input id="paypal-whsec" type="password" x-model="paypalForm.webhookSecret" :placeholder="paypalStatus.has_webhook_secret ? 'Already set — leave blank to keep it' : 'WH-…'" /></div>
+              <div class="field"><label for="paypal-mode">Mode</label>
+                <select id="paypal-mode" x-model="paypalForm.mode">
+                  <option value="test">Test (sandbox)</option>
+                  <option value="live">Live</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="paypal-webhook-url">Your webhook URL (paste this into your PayPal app's Webhooks settings)</label>
+              <input id="paypal-webhook-url" readonly :value="paypalStatus.webhookUrl" onclick="this.select()" />
+            </div>
+            <div class="cluster">
+              <button class="btn" @click="savePaypalCredentials(true)" :disabled="paypalSaving">Save &amp; enable</button>
+              <button class="btn ghost" @click="savePaypalCredentials(false)" :disabled="paypalSaving">Save without enabling</button>
+              <span class="badge" :class="paypalStatus.enabled ? 'confirmed' : 'pending'" x-text="paypalStatus.enabled ? 'Enabled' : 'Not enabled'"></span>
+            </div>
+          </div>
+            <h3 id="store-domain">Custom domain</h3>
+          <div class="card">
+            <h3 style="margin-top:0;">Custom Domain</h3>
+            <p class="hint" style="margin-top:0;">
+              Point your own domain (e.g. <strong>shop.yourbrand.com</strong>) at this storefront instead of the
+              default subdomain. You stay in full control of your domain — we never touch your registrar.
+            </p>
+
+            <!-- current status strip — shown once a domain is saved -->
+            <div class="domain-status-strip" x-show="domainStatus.custom_domain">
+              <span class="domain-name" x-text="domainStatus.custom_domain"></span>
+              <span class="badge"
+                :class="domainStatus.custom_domain_verified_at ? 'verified' : 'unverified'"
+                x-text="domainStatus.custom_domain_verified_at ? '✓ Verified' : 'Unverified'">
+              </span>
+              <template x-if="domainStatus.custom_domain_verified_at">
+                <a :href="'https://' + domainStatus.custom_domain" target="_blank" rel="noopener"
+                   class="muted" style="font-size:0.8rem; text-decoration:none;">
+                  ↗ Visit
+                </a>
+              </template>
+            </div>
+
+            <!-- DNS instructions — shown when a domain is claimed but not yet verified -->
+            <div class="dns-instructions" x-show="domainStatus.custom_domain && !domainStatus.custom_domain_verified_at">
+              <h4>Point your DNS at this server</h4>
+              <p class="hint" style="margin-top:0; margin-bottom:0.75rem;">
+                Add an <strong>A record</strong> (or <strong>CNAME</strong> for a <code>www</code> subdomain)
+                in your domain registrar's DNS settings:
+              </p>
+              <div class="dns-record-row">
+                <span>TYPE</span>
+                <span>HOST</span>
+                <span>VALUE</span>
+              </div>
+              <div class="dns-record-row" style="margin-top:0.4rem;">
+                <span>A</span>
+                <span>@</span>
+                <span>→ your server IP (match your afrexpay.com A record)</span>
+              </div>
+              <p class="hint" style="margin-top:0.75rem; margin-bottom:0;">
+                DNS changes can take up to 48 hours to propagate, though usually live within minutes.
+                Once updated, click <strong>Verify DNS</strong> below.
+              </p>
+            </div>
+
+            <!-- input + action cluster -->
+            <div class="field">
+              <label for="domain-input">Your domain</label>
+              <div class="cluster">
+                <input id="domain-input" x-model="domainInput" placeholder="shop.yourbrand.com"
+                       class="flex-1"
+                       :disabled="domainSaving || domainVerifying" />
+                <button class="btn" id="domain-save-btn"
+                        @click="saveDomain"
+                        :disabled="domainSaving || !domainInput.trim()"
+                        x-text="domainSaving ? 'Saving...' : 'Save domain'">
+                </button>
+                <button class="btn accent" id="domain-verify-btn"
+                        @click="verifyDomain"
+                        :disabled="domainVerifying || !domainStatus.custom_domain"
+                        x-show="domainStatus.custom_domain && !domainStatus.custom_domain_verified_at"
+                        x-text="domainVerifying ? 'Checking DNS...' : 'Verify DNS'">
+                </button>
+              </div>
+              <p class="hint">Enter your full domain without <code>https://</code>, e.g. <code>shop.yourbrand.com</code>.</p>
+            </div>
+
+            <p class="error-text" x-show="domainError" x-text="domainError"></p>
+
+            <!-- verified confirmation -->
+            <template x-if="domainStatus.custom_domain_verified_at">
+              <p class="success-text">
+                ✓ Domain verified — your storefront is live at
+                <a :href="'https://' + domainStatus.custom_domain" target="_blank" rel="noopener"
+                   x-text="domainStatus.custom_domain"></a>.
+                TLS is issued automatically on first visit via Caddy.
+              </p>
+            </template>
+          </div>
+          </div>
         </div>
+
 
         <!-- PRODUCTS -->
         <div x-show="tab === 'products'">
@@ -898,144 +1053,6 @@
           </div>
         </div>
 
-        <!-- PAYMENTS -->
-        <div x-show="tab === 'payments'">
-          <div class="card">
-            <h3 style="margin-top:0;">Stripe</h3>
-            <p class="hint" style="margin-top:0;">Paste your Stripe API keys here. Get them from your Stripe Dashboard → Developers → API keys.</p>
-            <div class="field-grid">
-              <div class="field"><label for="stripe-pk">Publishable key</label><input id="stripe-pk" x-model="stripeForm.publishableKey" placeholder="pk_test_..." /></div>
-              <div class="field"><label for="stripe-sk">Secret key</label><input id="stripe-sk" type="password" x-model="stripeForm.secretKey" :placeholder="stripeStatus.has_secret_key ? 'Already set — leave blank to keep it' : 'sk_test_...'" /></div>
-            </div>
-            <div class="field-grid">
-              <div class="field"><label for="stripe-whsec">Webhook signing secret</label><input id="stripe-whsec" type="password" x-model="stripeForm.webhookSecret" :placeholder="stripeStatus.has_webhook_secret ? 'Already set — leave blank to keep it' : 'whsec_...'" /></div>
-              <div class="field"><label for="stripe-mode">Mode</label>
-                <select id="stripe-mode" x-model="stripeForm.mode">
-                  <option value="test">Test</option>
-                  <option value="live">Live</option>
-                </select>
-              </div>
-            </div>
-            <div class="field">
-              <label for="stripe-webhook-url">Your webhook URL (paste this into your Stripe Dashboard → Developers → Webhooks)</label>
-              <input id="stripe-webhook-url" readonly :value="stripeStatus.webhookUrl" onclick="this.select()" />
-            </div>
-            <div class="cluster">
-              <button class="btn" @click="saveStripeCredentials(true)" :disabled="stripeSaving">Save &amp; enable</button>
-              <button class="btn ghost" @click="saveStripeCredentials(false)" :disabled="stripeSaving">Save without enabling</button>
-              <span class="badge" :class="stripeStatus.enabled ? 'confirmed' : 'pending'" x-text="stripeStatus.enabled ? 'Enabled' : 'Not enabled'"></span>
-            </div>
-          </div>
-          <div class="card">
-            <h3 style="margin-top:0;">PayPal</h3>
-            <p class="hint" style="margin-top:0;">Paste your PayPal REST app credentials here. Get them from your PayPal Dashboard → Apps &amp; Credentials.</p>
-            <div class="field-grid">
-              <div class="field"><label for="paypal-pk">Client ID</label><input id="paypal-pk" x-model="paypalForm.publishableKey" placeholder="AY…" /></div>
-              <div class="field"><label for="paypal-sk">Secret</label><input id="paypal-sk" type="password" x-model="paypalForm.secretKey" :placeholder="paypalStatus.has_secret_key ? 'Already set — leave blank to keep it' : 'EO…'" /></div>
-            </div>
-            <div class="field-grid">
-              <div class="field"><label for="paypal-whsec">Webhook ID</label><input id="paypal-whsec" type="password" x-model="paypalForm.webhookSecret" :placeholder="paypalStatus.has_webhook_secret ? 'Already set — leave blank to keep it' : 'WH-…'" /></div>
-              <div class="field"><label for="paypal-mode">Mode</label>
-                <select id="paypal-mode" x-model="paypalForm.mode">
-                  <option value="test">Test (sandbox)</option>
-                  <option value="live">Live</option>
-                </select>
-              </div>
-            </div>
-            <div class="field">
-              <label for="paypal-webhook-url">Your webhook URL (paste this into your PayPal app's Webhooks settings)</label>
-              <input id="paypal-webhook-url" readonly :value="paypalStatus.webhookUrl" onclick="this.select()" />
-            </div>
-            <div class="cluster">
-              <button class="btn" @click="savePaypalCredentials(true)" :disabled="paypalSaving">Save &amp; enable</button>
-              <button class="btn ghost" @click="savePaypalCredentials(false)" :disabled="paypalSaving">Save without enabling</button>
-              <span class="badge" :class="paypalStatus.enabled ? 'confirmed' : 'pending'" x-text="paypalStatus.enabled ? 'Enabled' : 'Not enabled'"></span>
-            </div>
-          </div>
-        </div>
-
-        <!-- CUSTOM DOMAIN -->
-        <div x-show="tab === 'domain'">
-          <div class="card">
-            <h3 style="margin-top:0;">Custom Domain</h3>
-            <p class="hint" style="margin-top:0;">
-              Point your own domain (e.g. <strong>shop.yourbrand.com</strong>) at this storefront instead of the
-              default subdomain. You stay in full control of your domain — we never touch your registrar.
-            </p>
-
-            <!-- current status strip — shown once a domain is saved -->
-            <div class="domain-status-strip" x-show="domainStatus.custom_domain">
-              <span class="domain-name" x-text="domainStatus.custom_domain"></span>
-              <span class="badge"
-                :class="domainStatus.custom_domain_verified_at ? 'verified' : 'unverified'"
-                x-text="domainStatus.custom_domain_verified_at ? '✓ Verified' : 'Unverified'">
-              </span>
-              <template x-if="domainStatus.custom_domain_verified_at">
-                <a :href="'https://' + domainStatus.custom_domain" target="_blank" rel="noopener"
-                   class="muted" style="font-size:0.8rem; text-decoration:none;">
-                  ↗ Visit
-                </a>
-              </template>
-            </div>
-
-            <!-- DNS instructions — shown when a domain is claimed but not yet verified -->
-            <div class="dns-instructions" x-show="domainStatus.custom_domain && !domainStatus.custom_domain_verified_at">
-              <h4>Point your DNS at this server</h4>
-              <p class="hint" style="margin-top:0; margin-bottom:0.75rem;">
-                Add an <strong>A record</strong> (or <strong>CNAME</strong> for a <code>www</code> subdomain)
-                in your domain registrar's DNS settings:
-              </p>
-              <div class="dns-record-row">
-                <span>TYPE</span>
-                <span>HOST</span>
-                <span>VALUE</span>
-              </div>
-              <div class="dns-record-row" style="margin-top:0.4rem;">
-                <span>A</span>
-                <span>@</span>
-                <span>→ your server IP (match your afrexpay.com A record)</span>
-              </div>
-              <p class="hint" style="margin-top:0.75rem; margin-bottom:0;">
-                DNS changes can take up to 48 hours to propagate, though usually live within minutes.
-                Once updated, click <strong>Verify DNS</strong> below.
-              </p>
-            </div>
-
-            <!-- input + action cluster -->
-            <div class="field">
-              <label for="domain-input">Your domain</label>
-              <div class="cluster">
-                <input id="domain-input" x-model="domainInput" placeholder="shop.yourbrand.com"
-                       class="flex-1"
-                       :disabled="domainSaving || domainVerifying" />
-                <button class="btn" id="domain-save-btn"
-                        @click="saveDomain"
-                        :disabled="domainSaving || !domainInput.trim()"
-                        x-text="domainSaving ? 'Saving...' : 'Save domain'">
-                </button>
-                <button class="btn accent" id="domain-verify-btn"
-                        @click="verifyDomain"
-                        :disabled="domainVerifying || !domainStatus.custom_domain"
-                        x-show="domainStatus.custom_domain && !domainStatus.custom_domain_verified_at"
-                        x-text="domainVerifying ? 'Checking DNS...' : 'Verify DNS'">
-                </button>
-              </div>
-              <p class="hint">Enter your full domain without <code>https://</code>, e.g. <code>shop.yourbrand.com</code>.</p>
-            </div>
-
-            <p class="error-text" x-show="domainError" x-text="domainError"></p>
-
-            <!-- verified confirmation -->
-            <template x-if="domainStatus.custom_domain_verified_at">
-              <p class="success-text">
-                ✓ Domain verified — your storefront is live at
-                <a :href="'https://' + domainStatus.custom_domain" target="_blank" rel="noopener"
-                   x-text="domainStatus.custom_domain"></a>.
-                TLS is issued automatically on first visit via Caddy.
-              </p>
-            </template>
-          </div>
-        </div>
 
       </div>
     </div>

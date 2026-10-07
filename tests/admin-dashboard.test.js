@@ -29,8 +29,8 @@ test("setTab bounces hidden vertical tabs home once the registry is loaded", () 
   assert.strictEqual(a.tab, "home");
   a.setTab("inquiries");
   assert.strictEqual(a.tab, "inquiries");
-  a.setTab("payments"); // always-visible tabs never bounce
-  assert.strictEqual(a.tab, "payments");
+  a.setTab("home"); // home never bounces
+  assert.strictEqual(a.tab, "home");
 });
 
 test("setTab does not bounce before the registry loads (first paint)", () => {
@@ -38,6 +38,28 @@ test("setTab does not bounce before the registry loads (first paint)", () => {
   a.verticals = {};
   a.setTab("orders");
   assert.strictEqual(a.tab, "orders");
+});
+
+test("legacy settings hashes land on home, where those sections live", () => {
+  const a = adminApp();
+  a.verticals = {
+    products: { dashboardTabs: ["products", "orders"] },
+    services: { dashboardTabs: ["services", "availability", "bookings"] },
+    listings: { dashboardTabs: ["listings", "inquiries", "reservations"] },
+  };
+  a.config = { vertical: "listings" };
+  for (const legacy of ["config", "payments", "domain"]) {
+    a.tab = "home";
+    // readTabFromHash path without a DOM: emulate the mapping branch
+    a.setTab(legacy);
+    assert.strictEqual(a.tab, "home", legacy);
+  }
+  assert.deepStrictEqual(
+    a.tabOrder(),
+    ["home", "listings", "inquiries", "reservations"],
+    "only home is global now"
+  );
+  assert.strictEqual(typeof a.scrollToId, "function");
 });
 
 test("exceptionIsOpen treats string 'false' as closed", () => {

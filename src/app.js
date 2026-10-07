@@ -28,6 +28,7 @@ const paymentCredentialsRoutes = require("./modules/payments/credentials.routes"
 const stripeWebhookRoutes = require("./modules/payments/webhook.routes");
 const domainRoutes = require("./modules/domains/domain.routes");
 const domainAskRoutes = require("./modules/domains/ask.routes");
+const { router: storeQrRouter, serveQrSvg } = require("./modules/store-qr/store-qr.routes");
 
 const app = express();
 
@@ -126,6 +127,7 @@ app.use("/api/inquiries", inquiryRoutes);
 app.use("/api/listing-reservations", reservationRoutes);
 app.use("/api/payments/credentials", paymentCredentialsRoutes);
 app.use("/api/domains", domainRoutes);
+app.use("/api/store-qr", storeQrRouter);
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, tenant: req.tenant.subdomain });
@@ -138,6 +140,11 @@ app.use("/media", serveMedia);
 app.use("/media", (req, res) => {
   res.status(404).json({ error: "Media not found." });
 });
+
+// Public per-store QR image for every storefront footer (<img src="/qr.svg">).
+// Mounted after tenant resolution (needs req.tenant) and before the
+// storefront catch-all, which would otherwise swallow the path.
+app.get("/qr.svg", serveQrSvg);
 
 // Everything else is the public storefront — theme picked per tenant.
 // Segment-anchored: the old prefix negative-lookahead also swallowed

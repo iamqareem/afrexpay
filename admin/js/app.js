@@ -21,7 +21,7 @@ function adminApp() {
     loading: {
       products: true, orders: true, services: true, hours: true,
       exceptions: true, bookings: true, listings: true,
-      inquiries: true, reservations: true, resources: true,
+      inquiries: true, reservations: true, resources: true, qr: true,
     },
 
     // client-side find / filter / sort per table (Phase 3). The raw
@@ -122,6 +122,10 @@ function adminApp() {
     paypalStatus: { enabled: false, has_secret_key: false, has_webhook_secret: false, webhookUrl: "" },
     paypalSaving: false,
 
+    // store QR (dashboard card + storefront footers share /qr.svg)
+    storeQr: { url: "", svg: "" },
+    qrError: "",
+
     // custom domain
     domainStatus: { custom_domain: null, custom_domain_verified_at: null },
     domainInput: "",
@@ -140,8 +144,10 @@ function adminApp() {
     // Tabs are hash-routed (#tab=orders) so refreshes and shared links
     // land on the right view. Always-visible tabs need no registry.
     tabOrder() {
-      return ["home", "config", "payments", "domain", "products", "services", "availability", "orders", "bookings", "listings", "inquiries", "reservations"]
-        .filter((t) => t === "home" || t === "config" || t === "payments" || t === "domain" || this.tabVisible(t));
+      // Only Home is global — store settings, payments and custom domain
+      // live as sections inside it, so small screens never scroll sideways.
+      return ["home", "products", "services", "availability", "orders", "bookings", "listings", "inquiries", "reservations"]
+        .filter((t) => t === "home" || this.tabVisible(t));
     },
 
     setTab(name) {
@@ -149,8 +155,7 @@ function adminApp() {
       // isn't visible (stale activity links, hand-typed hashes). The
       // registry isn't loaded yet on first paint, so skip the check then;
       // checkSession() re-enforces after loadAll().
-      const always = ["home", "config", "payments", "domain"];
-      if (!always.includes(name) && this.verticals && Object.keys(this.verticals).length > 0 && !this.tabVisible(name)) {
+      if (name !== "home" && this.verticals && Object.keys(this.verticals).length > 0 && !this.tabVisible(name)) {
         name = "home";
       }
       this.tab = name;
@@ -159,8 +164,12 @@ function adminApp() {
 
     readTabFromHash() {
       const m = (location.hash || "").match(/tab=([a-z-]+)/);
-      const known = ["home", "config", "payments", "domain", "products", "services", "availability", "orders", "bookings", "listings", "inquiries", "reservations"];
+      // Legacy hashes (#tab=config|payments|domain) predate the merge —
+      // they land on Home, where those sections live now.
+      const known = ["home", "products", "services", "availability", "orders", "bookings", "listings", "inquiries", "reservations"];
+      const legacy = ["config", "payments", "domain"];
       if (m && known.includes(m[1])) this.setTab(m[1]);
+      else if (m && legacy.includes(m[1])) this.setTab("home");
     },
 
     tabKey(e) {
@@ -193,7 +202,7 @@ function adminApp() {
       if (!this.loggedIn) return;
       await this.loadAll();
       // A bookmarked hash may point at a tab this vertical doesn't have.
-      if (!["home", "config", "payments", "domain"].includes(this.tab) && !this.tabVisible(this.tab)) {
+      if (this.tab !== "home" && !this.tabVisible(this.tab)) {
         this.tab = "home";
       }
     },
@@ -210,6 +219,7 @@ function adminApp() {
       await Promise.all([
         this.loadProducts(), this.loadOrders(), this.loadThemes(),
         this.loadStripeStatus(), this.loadPaypalStatus(), this.loadDomainStatus(),
+        this.loadStoreQr(),
       ]);
       if (this.tabVisible("services")) {
         await Promise.all([this.loadServices(), this.loadResources(), this.loadWeeklyHours(), this.loadExceptions(), this.loadBookings()]);
@@ -253,6 +263,11 @@ function adminApp() {
       }
     },
 
+    scrollToId(id) {
+      const el = document.getElementById(id);
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+
     // Manual retry for the home error card: re-arm every skeleton and run
     // the whole boot sequence again (loadAll clears bootstrapFailed first,
     // so a still-broken backend re-latches it instead of looping).
@@ -260,10 +275,10 @@ function adminApp() {
       this.loading = {
         products: true, orders: true, services: true, hours: true,
         exceptions: true, bookings: true, listings: true,
-        inquiries: true, reservations: true, resources: true,
+        inquiries: true, reservations: true, resources: true, qr: true,
       };
       await this.loadAll();
-      if (!["home", "config", "payments", "domain"].includes(this.tab) && !this.tabVisible(this.tab)) {
+      if (this.tab !== "home" && !this.tabVisible(this.tab)) {
         this.tab = "home";
       }
     },
@@ -310,7 +325,7 @@ function adminApp() {
       await this.loadAll();
       // Same guard as checkSession: a pre-login #tab= bookmark for a
       // vertical this store doesn't have must not strand the dashboard.
-      if (!["home", "config", "payments", "domain"].includes(this.tab) && !this.tabVisible(this.tab)) {
+      if (this.tab !== "home" && !this.tabVisible(this.tab)) {
         this.tab = "home";
       }
     },
@@ -359,10 +374,12 @@ function adminApp() {
       this.photoDragOver = false;
       this.dragPhoto = null;
       this.dropTarget = null;
+      this.storeQr = { url: "", svg: "" };
+      this.qrError = "";
       this.loading = {
         products: true, orders: true, services: true, hours: true,
         exceptions: true, bookings: true, listings: true,
-        inquiries: true, reservations: true, resources: true,
+        inquiries: true, reservations: true, resources: true, qr: true,
       };
       try { location.hash = ""; } catch { /* non-browser env */ }
     },
@@ -976,7 +993,7 @@ function adminApp() {
         await Promise.all([this.loadListings(), this.loadInquiries(), this.loadReservations()]);
       }
       this.markSkippedVerticalsDone();
-      if (!["home", "config", "payments", "domain"].includes(this.tab) && !this.tabVisible(this.tab)) {
+      if (this.tab !== "home" && !this.tabVisible(this.tab)) {
         this.setTab("home");
       }
     },
@@ -1505,6 +1522,51 @@ function adminApp() {
       } finally {
         this.paypalSaving = false;
       }
+    },
+
+    // ---- store QR ----
+    async loadStoreQr() {
+      this.loading.qr = true;
+      try {
+        const res = await fetch("/api/store-qr", { credentials: "same-origin" });
+        if (!res.ok) throw new Error("Could not load the store QR.");
+        const data = await res.json();
+        this.storeQr = { url: data.url || "", svg: data.svg || "" };
+        this.qrError = "";
+      } catch (err) {
+        this.storeQr = { url: "", svg: "" };
+        this.qrError = err.message || "Could not load the store QR.";
+      } finally {
+        this.loading.qr = false;
+      }
+    },
+
+    copyStoreLink() {
+      const url = this.storeQr.url;
+      if (!url) return;
+      const done = () => this.showToast("Store link copied.");
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(done).catch(() => this.showToast("Copy failed — long-press the link instead.", "error"));
+        } else {
+          this.showToast("Copy not supported — long-press the link instead.", "error");
+        }
+      } catch {
+        this.showToast("Copy failed — long-press the link instead.", "error");
+      }
+    },
+
+    downloadStoreQr() {
+      if (!this.storeQr.svg) return;
+      const blob = new Blob([this.storeQr.svg], { type: "image/svg+xml" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      }, 1000);
     },
 
     // ---- custom domain ----

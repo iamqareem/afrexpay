@@ -389,11 +389,11 @@ html[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
   padding: 0 1.5rem;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
-  overflow-x: auto;
   position: sticky;
   top: 0;
   z-index: 30;
