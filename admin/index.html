@@ -167,13 +167,14 @@
 
             <div class="card" x-show="!loading.qr || storeQr.svg">
               <h3>Share your store</h3>
+              <p class="muted" style="margin-top:-0.5rem">Customers scan the code to open your storefront.</p>
               <div x-show="loading.qr && !storeQr.svg">
-                <span class="skel" style="width:120px;height:120px;display:block"></span>
+                <span class="skel" style="width:132px;height:132px;display:block"></span>
               </div>
-              <div x-show="storeQr.svg" class="cluster" style="align-items:center">
-                <div x-html="storeQr.svg" style="width:120px;height:120px" role="img" aria-label="Store QR code"></div>
-                <div class="flex-1">
-                  <p class="muted" style="word-break:break-all" x-text="storeQr.url"></p>
+              <div x-show="storeQr.svg" class="qr-layout">
+                <div class="qr-frame" x-html="storeQr.svg" role="img" aria-label="Store QR code"></div>
+                <div class="qr-details">
+                  <p class="muted qr-url" x-text="storeQr.url"></p>
                   <div class="cluster">
                     <button class="btn" @click="copyStoreLink()">Copy link</button>
                     <button class="btn ghost" @click="downloadStoreQr()">Download QR</button>

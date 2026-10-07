@@ -213,6 +213,53 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; margin: 0; }
 .card h3 { margin-bottom: 1rem; font-size: 1.05rem; }
 
 /* ---- home overview ---- */
+/* ---- share-your-store QR card ---- */
+.qr-layout {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+.qr-frame {
+  width: 132px;
+  height: 132px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.qr-frame svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.qr-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.qr-url {
+  margin: 0;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 520px) {
+  .qr-layout {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+  .qr-details {
+    align-items: center;
+    width: 100%;
+  }
+  .qr-details .cluster {
+    justify-content: center;
+  }
+}
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
