@@ -79,7 +79,7 @@
 
       <div class="tabs" role="tablist" aria-label="Dashboard sections" @keydown="tabKey($event)">
         <button type="button" class="tab" role="tab" data-tab="home" :aria-selected="tab === 'home'" :class="{active: tab === 'home'}" @click="setTab('home')">Home</button>
-        <button type="button" class="tab pos-tab" role="tab" data-tab="pos" :aria-selected="tab === 'pos'" :class="{active: tab === 'pos'}" @click="setTab('pos')" x-show="tabVisible('pos')">Point of Sale</button>
+        <button type="button" class="tab pos-tab" role="tab" data-tab="pos" :aria-selected="tab === 'pos'" :class="{active: tab === 'pos'}" @click="setTab('pos')" x-show="tabVisible('pos')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2h10v12l-2.5-1.5L8 14l-2.5-1.5L3 14V2z"/><path d="M6 6h4M6 8.5h4"/></svg>Point of Sale</button>
         <button type="button" class="tab" role="tab" data-tab="products" :aria-selected="tab === 'products'" :class="{active: tab === 'products'}" @click="setTab('products')" x-show="tabVisible('products')">Products</button>
         <button type="button" class="tab" role="tab" data-tab="services" :aria-selected="tab === 'services'" :class="{active: tab === 'services'}" @click="setTab('services')" x-show="tabVisible('services')">Services</button>
         <button type="button" class="tab" role="tab" data-tab="availability" :aria-selected="tab === 'availability'" :class="{active: tab === 'availability'}" @click="setTab('availability')" x-show="tabVisible('availability')">Availability</button>
