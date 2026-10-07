@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title id="page-title">Soko</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span id="brand-name"></span> <span id="brand-accent" class="accent"></span></div>
+    <div class="qr-mini"><a href="/qr.svg" aria-label="Store QR code"><img src="/qr.svg" alt="Scan to visit this store" width="28" height="28" loading="lazy" /></a></div>
+  </header>
+
+  <main>
+    <!-- SHOP: search-first snap feed -->
+    <section id="view-shop" class="view">
+      <div class="search-hero">
+        <input id="shop-search" type="search" placeholder="Search the market…" aria-label="Search products" autocomplete="off" />
+      </div>
+      <div id="chip-row" class="chips" role="group" aria-label="Categories"></div>
+      <div id="feed" class="feed" aria-live="polite"></div>
+      <p id="feed-empty" class="empty hidden">Nothing here yet — check back soon.</p>
+    </section>
+
+    <!-- SEARCH -->
+    <section id="view-search" class="view hidden">
+      <input id="big-search" type="search" placeholder="Type to search…" aria-label="Search all products" autocomplete="off" />
+      <div id="recent-row" class="chips" aria-label="Recent searches"></div>
+      <div id="search-results" class="feed"></div>
+    </section>
+
+    <!-- CART -->
+    <section id="view-cart" class="view hidden">
+      <div id="cart-lines"></div>
+      <p id="cart-empty" class="empty">Your bag is empty — go fill it. 🧺</p>
+      <div id="cart-footer" class="hidden">
+        <p class="total-row"><span>Total</span><strong id="cart-total"></strong></p>
+        <button id="checkout-open" class="cta">Checkout</button>
+      </div>
+    </section>
+
+    <!-- TRACK -->
+    <section id="view-track" class="view hidden">
+      <p class="muted">Paste the order code from your confirmation to follow it.</p>
+      <div class="track-row">
+        <input id="track-id" placeholder="Order code" aria-label="Order code" autocomplete="off" />
+        <button id="track-go" class="btn-ghost">Track</button>
+      </div>
+      <ol id="track-timeline" class="timeline"></ol>
+      <p id="track-error" class="error hidden"></p>
+    </section>
+  </main>
+
+  <!-- bottom tab bar: one-thumb zone -->
+  <nav class="tabbar" aria-label="Marketplace sections">
+    <button data-view="shop" class="tabbtn on" aria-label="Shop">🛍<span>Shop</span></button>
+    <button data-view="search" class="tabbtn" aria-label="Search">🔍<span>Search</span></button>
+    <button data-view="cart" class="tabbtn" aria-label="Bag">🧺<span>Bag</span><em id="cart-badge" class="badge hidden"></em></button>
+    <button data-view="track" class="tabbtn" aria-label="Track">📦<span>Track</span></button>
+  </nav>
+
+  <!-- product detail sheet -->
+  <div id="sheet-overlay" class="overlay hidden"></div>
+  <div id="sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="Product details">
+    <button id="sheet-close" class="sheet-close" aria-label="Close">×</button>
+    <div id="sheet-body"></div>
+  </div>
+
+  <!-- checkout sheet -->
+  <div id="co-overlay" class="overlay hidden"></div>
+  <div id="co-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="Checkout">
+    <button id="co-close" class="sheet-close" aria-label="Close">×</button>
+    <div id="co-body">
+      <h2>Checkout</h2>
+      <form id="co-form" class="stack">
+        <label>Name<input name="customerName" required autocomplete="name" /></label>
+        <label>Phone<input name="phone" required autocomplete="tel" /></label>
+        <label>Address<input name="address" required autocomplete="street-address" /></label>
+        <label>Note (optional)<input name="deliveryNotes" /></label>
+        <p id="co-error" class="error hidden"></p>
+        <button type="submit" id="co-submit" class="cta">Place order</button>
+      </form>
+      <div id="co-pay" class="hidden">
+        <p class="muted">Order placed — complete payment to confirm it.</p>
+        <div id="pay-now-slot"></div>
+      </div>
+      <div id="co-done" class="hidden">
+        <p class="paid">Payment received ✓ — thanks!</p>
+        <p class="muted">Order <strong id="co-order-id"></strong>. Screenshot this code to track it under 📦 Track.</p>
+      </div>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <a href="/" aria-label="Visit store"><img src="/qr.svg" alt="Scan to visit this store" width="96" height="96" loading="lazy" /></a>
+    <p class="muted"><span id="footer-text"></span></p>
+  </footer>
+
+  <script src="/js/afrexpay-checkout.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

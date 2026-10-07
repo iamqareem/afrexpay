@@ -48,6 +48,13 @@ const THEMES_REGISTRY = {
     subCategory: "Fragrance & Modest Attire",
     description: "Elegant storefront for perfumes, attars, and modest wear with category filtering.",
   },
+  soko: {
+    id: "soko",
+    label: "Soko",
+    vertical: "products",
+    subCategory: "Mobile Marketplace",
+    description: "Mobile-first social marketplace — snap feed, bag, and order tracking.",
+  },
   "booking-slots": {
     id: "booking-slots",
     label: "Booking Slots",
@@ -82,7 +89,7 @@ const VERTICALS = {
   products: {
     label: "Physical products",
     dashboardTabs: ["products", "orders", "pos"],
-    compatibleThemes: ["hangtag", "electronics", "yeezy", "backmarket", "automobile", "souk"],
+    compatibleThemes: ["hangtag", "electronics", "yeezy", "backmarket", "automobile", "souk", "soko"],
   },
   services: {
     label: "Bookable services",

@@ -158,9 +158,13 @@ router.patch("/:id", authRequired, async (req, res) => {
   if (!ORDER_STATUSES.includes(status)) {
     return res.status(400).json({ error: `status must be one of: ${ORDER_STATUSES.join(", ")}.` });
   }
-  const updated = await updateOrderStatus(req.tenant.id, req.params.id, status);
-  if (!updated) return res.status(404).json({ error: "Order not found." });
-  res.json(updated);
+  try {
+    const updated = await updateOrderStatus(req.tenant.id, req.params.id, status);
+    if (!updated) return res.status(404).json({ error: "Order not found." });
+    res.json(updated);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.status ? err.message : "Could not update order." });
+  }
 });
 
 module.exports = router;

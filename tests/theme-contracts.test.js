@@ -13,6 +13,18 @@ function themeSrc(relative) {
   return fs.readFileSync(path.join(__dirname, "..", relative), "utf8");
 }
 
+test("soko uses per-row currency, escaper, and QR footer", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const js = fs.readFileSync(path.join(__dirname, "..", "themes/soko/js/app.js"), "utf8");
+  const html = fs.readFileSync(path.join(__dirname, "..", "themes/soko/index.html"), "utf8");
+  assert.ok(js.includes("money(p.price_minor, p.currency)"), "feed prices per-row currency");
+  assert.ok(js.includes("function esc("), "escaper defined");
+  assert.ok(html.includes('/qr.svg'), "footer QR present");
+  assert.ok(html.includes('id="track-timeline"'), "track view present");
+  assert.ok(!js.includes('get("paid")'), "no paid-param trust");
+});
+
 test("shared checkout component defines each function exactly once", () => {
   const fs = require("node:fs");
   const path = require("node:path");
@@ -25,6 +37,7 @@ test("shared checkout component defines each function exactly once", () => {
 
 test("no theme trusts ?paid=1 for the paid banner", () => {
   const files = [
+    "themes/soko/js/app.js",
     "themes/hangtag/js/app.js",
     "themes/backmarket/js/app.js",
     "themes/souk/js/app.js",

@@ -8,6 +8,17 @@ const { parseListParams, searchCondition } = require("../../lib/list-query");
 // 500 from the CHECK/enum cast instead of a readable error.
 const ORDER_STATUSES = ["pending", "confirmed", "fulfilled", "cancelled"];
 
+// Forward-only lifecycle mirroring bookings: cancelled/fulfilled are
+// terminal (no resurrection, no de-confirming a paid order). Cancelling a
+// live order restores its stock — the merchant path must agree with the
+// abandoned-checkout sweep, which already restores on its own cancels.
+const ORDER_TRANSITIONS = {
+  pending: new Set(["confirmed", "cancelled"]),
+  confirmed: new Set(["fulfilled", "cancelled"]),
+  fulfilled: new Set(),
+  cancelled: new Set(),
+};
+
 async function createOrder(tenantId, { customerName, phone, address, deliveryNotes, items }) {
   const client = await pool.connect();
   try {
@@ -348,11 +359,51 @@ async function listOrders(tenantId, params = {}) {
 // payment webhook (which moves pending -> confirmed on markOrderPaid).
 // Tenant-scoped; null when the order belongs to someone else.
 async function updateOrderStatus(tenantId, orderId, status) {
-  const { rows } = await pool.query(
-    `UPDATE orders SET status = $3 WHERE tenant_id = $1 AND id = $2 RETURNING *`,
-    [tenantId, orderId, status]
-  );
-  return rows[0] || null;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const currentResult = await client.query(
+      `SELECT status FROM orders WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
+      [tenantId, orderId]
+    );
+    const current = currentResult.rows[0]?.status;
+    if (!current) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+    const allowed = ORDER_TRANSITIONS[current] || new Set();
+    if (!allowed.has(status)) {
+      await client.query("ROLLBACK");
+      throw Object.assign(
+        new Error(`Cannot move order from '${current}' to '${status}'.`),
+        { status: 400 }
+      );
+    }
+    const { rows } = await client.query(
+      `UPDATE orders SET status = $3 WHERE tenant_id = $1 AND id = $2 RETURNING *`,
+      [tenantId, orderId, status]
+    );
+    if (status === "cancelled") {
+      // Merchant cancel restores reserved stock (untracked NULL stock
+      // untouched). Aggregated per product first: one UPDATE per target
+      // row, so multi-line orders restore fully (a plain join would apply
+      // only one arbitrary line's qty per product).
+      await client.query(
+        `UPDATE products p SET stock_qty = p.stock_qty + agg.qty
+         FROM (SELECT product_id, SUM(qty) AS qty FROM order_items
+               WHERE order_id = $2 GROUP BY product_id) agg
+         WHERE p.tenant_id = $1 AND p.id = agg.product_id AND p.stock_qty IS NOT NULL`,
+        [tenantId, orderId]
+      );
+    }
+    await client.query("COMMIT");
+    return rows[0] || null;
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // Abandoned-checkout sweep: cancel orders where the customer started a
