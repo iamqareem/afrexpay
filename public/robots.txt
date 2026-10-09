@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /media/
+
+Sitemap: https://afrexpay.app/sitemap.xml

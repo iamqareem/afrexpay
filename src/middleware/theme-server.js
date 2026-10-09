@@ -8,6 +8,7 @@
 const express = require("express");
 const fs = require("node:fs");
 const path = require("node:path");
+const { injectSeoIntoHtml, canonicalUrlForRequest } = require("../lib/seo");
 
 const THEMES_DIR = path.join(__dirname, "..", "..", "themes");
 const DEFAULT_THEME = "hangtag";
@@ -26,6 +27,7 @@ const VALID_THEMES = new Set(
 );
 
 const staticHandlerCache = new Map();
+const indexHtmlCache = new Map(); // themeSlug -> raw index.html (SEO tags injected per request)
 
 function getStaticHandler(themeSlug) {
   if (staticHandlerCache.has(themeSlug)) return staticHandlerCache.get(themeSlug);
@@ -44,11 +46,26 @@ function serveStorefront(req, res, next) {
     if (err) return next(err);
     // No matching static file (e.g. the root path "/") — serve that theme's
     // index.html. This is the storefront's single HTML shell; app.js takes
-    // it from there via /api/config and /api/products.
+    // it from there via /api/config and /api/products. SEO tags are injected
+    // per request from req.tenant so crawlers see name/canonical/OG without
+    // JS, while humans get the identical shell + client-side rendering.
     const indexPath = path.join(THEMES_DIR, themeSlug, "index.html");
-    res.sendFile(indexPath, (sendErr) => {
-      if (sendErr) next(sendErr);
-    });
+    let raw = indexHtmlCache.get(themeSlug);
+    if (raw === undefined) {
+      try {
+        raw = fs.readFileSync(indexPath, "utf8");
+      } catch (readErr) {
+        return next(readErr);
+      }
+      indexHtmlCache.set(themeSlug, raw);
+    }
+    try {
+      const canonicalUrl = canonicalUrlForRequest(req.tenant, req);
+      const html = injectSeoIntoHtml(raw, { tenant: req.tenant, canonicalUrl });
+      res.type("html").send(html);
+    } catch (seoErr) {
+      next(seoErr);
+    }
   });
 }
 

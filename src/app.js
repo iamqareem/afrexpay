@@ -103,6 +103,12 @@ app.use((req, res, next) => {
 // points at, so it's mounted after the resolver, not before.
 app.use(tenantResolver);
 
+// Dashboards are merchant-only: never index them. Meta noindex lives in
+// admin/index.html; this header covers non-HTML assets under /admin too.
+app.use("/admin", (req, res, next) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  next();
+});
 app.use("/admin", express.static(path.join(__dirname, "..", "admin")));
 
 app.use("/api/config", configRoutes);
@@ -145,6 +151,23 @@ app.use("/media", (req, res) => {
 // Mounted after tenant resolution (needs req.tenant) and before the
 // storefront catch-all, which would otherwise swallow the path.
 app.get("/qr.svg", serveQrSvg);
+
+// Per-tenant crawl files. Same placement rule as /qr.svg: they need
+// req.tenant and must beat the storefront catch-all, which would otherwise
+// serve index.html with a 200 for /robots.txt and /sitemap.xml (invalid for
+// crawlers). Base-domain robots/sitemap are static files in public/ and are
+// served before the resolver — these two only ever fire for tenant hosts
+// (subdomains + verified custom domains).
+app.get("/robots.txt", (req, res) => {
+  const { canonicalBaseForTenant, buildTenantRobotsTxt } = require("./lib/seo");
+  const canonicalBase = canonicalBaseForTenant(req.tenant, req.headers.host);
+  res.type("text/plain").send(buildTenantRobotsTxt(canonicalBase));
+});
+app.get("/sitemap.xml", (req, res) => {
+  const { canonicalBaseForTenant, buildTenantSitemapXml } = require("./lib/seo");
+  const canonicalBase = canonicalBaseForTenant(req.tenant, req.headers.host);
+  res.type("application/xml").send(buildTenantSitemapXml(canonicalBase));
+});
 
 // Everything else is the public storefront — theme picked per tenant.
 // Segment-anchored: the old prefix negative-lookahead also swallowed
