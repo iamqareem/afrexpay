@@ -665,7 +665,14 @@ merchant-specific forked per theme:
   are minted once from name/title at create time and stay stable across
   renames; public JSON companions live at
   `GET /api/products|services|listings/slug/:slug`.
-- **Next (agentic shopping track)**: ~~product feeds, per-store `llms.txt`,
+- **Merchant controls** (dashboard Home → Search & discovery): search title /
+  description overrides (blank = automatic), a per-store hide-from-search
+  toggle (`config.noindex`), and copy buttons for every machine URL
+  (sitemap, feeds, `llms.txt`, profile, agent API). No backend work was
+  needed for persistence — `PATCH /api/config` deep-merges arbitrary keys
+  and busts the tenant cache. Ops checklist lives in
+  `docs/runbook-seo.md`.
+- **Agentic shopping**: ~~product feeds, per-store `llms.txt`,
   and a read-only agent API~~ — shipped: `GET /feed/products.json`
   (ACP-compatible) + `GET /feed/products.csv` (Google Merchant),
   per-store `GET /llms.txt` and `GET /.well-known/store-profile.json`,

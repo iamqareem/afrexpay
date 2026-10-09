@@ -1836,9 +1836,15 @@ function adminApp() {
     },
 
     copyStoreLink() {
-      const url = this.storeQr.url;
-      if (!url) return;
-      const done = () => this.showToast("Store link copied.");
+      this.copyDiscoveryLink("", "Store link copied.");
+    },
+
+    // Copy buttons in the Search & discovery card: suffix is the path
+    // below the canonical store URL (e.g. "/sitemap.xml").
+    copyDiscoveryLink(suffix, label) {
+      const url = (this.storeQr.url || "") + (suffix || "");
+      if (!this.storeQr.url) return;
+      const done = () => this.showToast(label || "Link copied.");
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(url).then(done).catch(() => this.showToast("Copy failed — long-press the link instead.", "error"));

@@ -111,8 +111,66 @@ test("discovery + agent routers load with the expected paths", () => {
   assert.strictEqual(typeof feedLimiter, "function");
 });
 
+test("dashboard Search & discovery card binds SEO fields + copy links", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "admin", "index.html"), "utf8");
+  assert.ok(html.includes('id="store-discovery"'), "discovery section anchor missing");
+  assert.ok(html.includes('x-model="config.seoTitle"'), "seoTitle binding missing");
+  assert.ok(html.includes('x-model="config.seoDescription"'), "seoDescription binding missing");
+  assert.ok(html.includes('x-model="config.noindex"'), "noindex binding missing");
+  const copies = html.match(/copyDiscoveryLink\('/g) || [];
+  assert.strictEqual(copies.length, 7, `expected 7 discovery copy buttons, found ${copies.length}`);
+  const js = fs.readFileSync(path.join(__dirname, "..", "admin", "js", "app.js"), "utf8");
+  assert.ok(js.includes("copyDiscoveryLink(suffix"), "copyDiscoveryLink helper missing in dashboard JS");
+});
+
 test("catalog-slugs migration loads in repo CJS style", () => {
   const migration = require("../migrations/1791557487982_catalog-slugs.js");
   assert.strictEqual(typeof migration.up, "function");
   assert.strictEqual(typeof migration.down, "function");
+});
+
+function innerGetPaths(router) {
+  const paths = new Set();
+  for (const layer of router.stack || []) {
+    if (layer.route && layer.route.methods?.get) paths.add(String(layer.route.path));
+  }
+  return paths;
+}
+
+test("agent + discovery routers expose the documented paths", () => {
+  const agentPaths = innerGetPaths(require("../src/modules/discovery/agent.routes"));
+  for (const p of ["/store", "/products", "/services", "/listings"]) {
+    assert.ok(agentPaths.has(p), `agent API missing GET ${p}`);
+  }
+  const discoveryPaths = innerGetPaths(require("../src/modules/discovery/discovery.routes"));
+  for (const p of ["/feed/products.json", "/feed/products.csv", "/llms.txt", "/.well-known/store-profile.json"]) {
+    assert.ok(discoveryPaths.has(p), `discovery router missing GET ${p}`);
+  }
+});
+
+test("SEO and agent paths are mounted in app, ahead of the storefront catch-all", () => {
+  // Express 5 keeps mount prefixes out of the introspectable layer (no
+  // .regexp/.path to read), so this pins handle identity + ordering: the
+  // exact URL prefixes are covered by live Host-header checks instead.
+  const app = require("../src/app");
+  const agentRoutes = require("../src/modules/discovery/agent.routes");
+  const discoveryRoutes = require("../src/modules/discovery/discovery.routes");
+  const stack = app.router.stack;
+  const directGet = new Set();
+  for (const layer of stack) {
+    if (layer.route && layer.route.methods?.get) directGet.add(String(layer.route.path));
+  }
+  for (const p of ["/robots.txt", "/sitemap.xml", "/qr.svg"]) {
+    assert.ok(directGet.has(p), `app missing GET ${p} — crawlers would get the HTML shell`);
+  }
+  const catchAllIdx = stack.findIndex((l) => l.route && String(l.route.path).includes("?!"));
+  assert.ok(catchAllIdx > 0, "storefront catch-all not found");
+  const idxOfRoute = (p) => stack.findIndex((l) => l.route && String(l.route.path) === p);
+  const idxOfHandle = (h) => stack.findIndex((l) => l.handle === h);
+  for (const p of ["/robots.txt", "/sitemap.xml", "/qr.svg"]) {
+    assert.ok(idxOfRoute(p) !== -1 && idxOfRoute(p) < catchAllIdx, `${p} must beat the catch-all`);
+  }
+  for (const [name, handle] of [["agent API", agentRoutes], ["discovery", discoveryRoutes]]) {
+    assert.ok(idxOfHandle(handle) !== -1 && idxOfHandle(handle) < catchAllIdx, `${name} router must be mounted ahead of the catch-all`);
+  }
 });
