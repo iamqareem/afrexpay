@@ -1,6 +1,7 @@
 // src/modules/listings/listing.service.js
 const pool = require("../../db/pool");
 const { parseListParams, searchCondition } = require("../../lib/list-query");
+const { uniqueSlug, isValidSlug } = require("../../lib/slug");
 const { getTenantCurrency } = require("../store-config/config.service");
 
 async function listListings(tenantId, params = {}) {
@@ -35,13 +36,22 @@ async function getListing(tenantId, listingId) {
   return rows[0] || null;
 }
 
+async function getListingBySlug(tenantId, slug) {
+  const { rows } = await pool.query(
+    `SELECT * FROM listings WHERE tenant_id = $1 AND slug = $2 AND status != 'off_market'`,
+    [tenantId, slug]
+  );
+  return rows[0] || null;
+}
+
 async function createListing(tenantId, data) {
   const { title, description, listingType, priceMinor, bedrooms, bathrooms, areaSqm, location, depositAmountMinor } = data;
   const currency = data.currency || (await getTenantCurrency(tenantId));
+  const slug = await uniqueSlug("listings", tenantId, data.slug && isValidSlug(data.slug) ? data.slug : title);
   const { rows } = await pool.query(
-    `INSERT INTO listings (tenant_id, title, description, listing_type, price_minor, currency, bedrooms, bathrooms, area_sqm, location, deposit_amount_minor)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-    [tenantId, title, description || null, listingType, priceMinor, currency || "UGX", bedrooms ?? null, bathrooms ?? null, areaSqm ?? null, location || null, depositAmountMinor ?? null]
+    `INSERT INTO listings (tenant_id, slug, title, description, listing_type, price_minor, currency, bedrooms, bathrooms, area_sqm, location, deposit_amount_minor)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+    [tenantId, slug, title, description || null, listingType, priceMinor, currency || "UGX", bedrooms ?? null, bathrooms ?? null, areaSqm ?? null, location || null, depositAmountMinor ?? null]
   );
   return rows[0];
 }
@@ -54,6 +64,12 @@ async function updateListing(tenantId, listingId, data) {
     priceMinor: "price_minor", currency: "currency", bedrooms: "bedrooms", bathrooms: "bathrooms",
     areaSqm: "area_sqm", location: "location", depositAmountMinor: "deposit_amount_minor",
   };
+  // Merchant-supplied slug only (renames keep the old slug). Format already
+  // enforced by validateListing at the route layer.
+  if (data.slug !== undefined) {
+    values.push(await uniqueSlug("listings", tenantId, data.slug));
+    fields.push(`slug = $${values.length}`);
+  }
   for (const [key, column] of Object.entries(columnMap)) {
     if (data[key] !== undefined) {
       values.push(data[key]);
@@ -76,4 +92,4 @@ async function removeListing(tenantId, listingId) {
   return rows[0] || null;
 }
 
-module.exports = { listListings, getListing, createListing, updateListing, removeListing };
+module.exports = { listListings, getListing, getListingBySlug, createListing, updateListing, removeListing };

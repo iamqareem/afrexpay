@@ -58,11 +58,11 @@ test("product create inherits the store currency; explicit wins", async () => {
   try {
     await productService.createProduct("t1", { sku: "a", name: "n", priceMinor: 5, sizes: ["M"] });
     const insert = s.seen.find((c) => /INSERT INTO products/.test(c.text));
-    assert.strictEqual(insert.values[5], "KES");
+    assert.strictEqual(insert.values[6], "KES"); // $7: slug now sits at $3
 
     await productService.createProduct("t1", { sku: "b", name: "n", priceMinor: 5, sizes: ["M"], currency: "USD" });
     const insert2 = s.seen.filter((c) => /INSERT INTO products/.test(c.text))[1];
-    assert.strictEqual(insert2.values[5], "USD");
+    assert.strictEqual(insert2.values[6], "USD");
   } finally {
     s.restore();
   }
@@ -75,11 +75,11 @@ test("service and listing creates inherit the store currency", async () => {
   try {
     await serviceService.createService("t1", { name: "n", durationMinutes: 30, priceMinor: 5 });
     const svc = s.seen.find((c) => /INSERT INTO services/.test(c.text));
-    assert.strictEqual(svc.values[5], "TZS");
+    assert.strictEqual(svc.values[6], "TZS"); // slug now sits at $2
 
     await listingService.createListing("t1", { title: "t", listingType: "sale", priceMinor: 5 });
     const lst = s.seen.find((c) => /INSERT INTO listings/.test(c.text));
-    assert.strictEqual(lst.values[5], "TZS");
+    assert.strictEqual(lst.values[6], "TZS"); // slug now sits at $2
   } finally {
     pool.connect = originalConnect;
     s.restore();

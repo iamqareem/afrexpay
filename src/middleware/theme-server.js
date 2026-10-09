@@ -8,7 +8,16 @@
 const express = require("express");
 const fs = require("node:fs");
 const path = require("node:path");
-const { injectSeoIntoHtml, canonicalUrlForRequest } = require("../lib/seo");
+const {
+  injectSeoIntoHtml,
+  injectEntitySeoIntoHtml,
+  canonicalUrlForRequest,
+  canonicalBaseForTenant,
+  absoluteMediaUrl,
+  ENTITY_PATH_RE,
+  KIND_BY_PREFIX,
+} = require("../lib/seo");
+const { getStorefrontEntity } = require("../modules/discovery/discovery.service");
 
 const THEMES_DIR = path.join(__dirname, "..", "..", "themes");
 const DEFAULT_THEME = "hangtag";
@@ -59,6 +68,14 @@ function serveStorefront(req, res, next) {
       }
       indexHtmlCache.set(themeSlug, raw);
     }
+    // Detail URLs (/p/:slug, /s/:slug, /l/:slug) get per-entity heads.
+    // Static-asset hits never reach here (handled above), so any match is
+    // a genuine entity page or an unknown slug — never a false positive.
+    const entityMatch = ENTITY_PATH_RE.exec(req.path);
+    if (entityMatch) {
+      serveEntityPage(req, res, next, raw, entityMatch);
+      return;
+    }
     try {
       const canonicalUrl = canonicalUrlForRequest(req.tenant, req);
       const html = injectSeoIntoHtml(raw, { tenant: req.tenant, canonicalUrl });
@@ -67,6 +84,36 @@ function serveStorefront(req, res, next) {
       next(seoErr);
     }
   });
+}
+
+// Detail page: same shell, entity-specific head (title, description,
+// canonical, OG image, typed JSON-LD). Unknown slugs are a real 404 with a
+// noindex shell — never a soft-404 200, which crawlers read as "index an
+// empty page under a product URL".
+async function serveEntityPage(req, res, next, raw, entityMatch) {
+  try {
+    const kind = KIND_BY_PREFIX[entityMatch[1]];
+    const slug = entityMatch[2].toLowerCase();
+    const entity = await getStorefrontEntity(req.tenant.id, kind, slug);
+    const canonicalBase = canonicalBaseForTenant(req.tenant, req.headers.host).replace(/\/+$/, "");
+    if (!entity || !entity.slug) {
+      const noindexTenant = { ...req.tenant, config: { ...(req.tenant.config || {}), noindex: true } };
+      const html = injectSeoIntoHtml(raw, { tenant: noindexTenant, canonicalUrl: `${canonicalBase}/` });
+      return res.status(404).type("html").send(html);
+    }
+    const canonicalUrl = `${canonicalBase}/${entityMatch[1]}/${entity.slug}`;
+    const imageUrl = absoluteMediaUrl(canonicalBase, entity.cover_path);
+    const html = injectEntitySeoIntoHtml(raw, {
+      tenant: req.tenant,
+      kind,
+      entity,
+      canonicalUrl,
+      imageUrl,
+    });
+    return res.type("html").send(html);
+  } catch (err) {
+    next(err);
+  }
 }
 
 module.exports = { serveStorefront, VALID_THEMES, THEMES_DIR };

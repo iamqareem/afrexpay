@@ -31,6 +31,7 @@ afrexpay/
     backmarket/             # refurbished-goods storefront theme
     automobile/             # auto & parts storefront theme
     souk/                   # fragrance & modest-attire storefront theme
+    soko/                   # mobile-first social marketplace theme
     booking-slots/           # service/booking storefront theme
     resort/                 # hotel & recreation booking theme
     listing-grid/             # real estate storefront theme
@@ -40,7 +41,7 @@ afrexpay/
     css/style.css            # hand-written, no build step (unlike themes, there's only one admin UI)
     js/app.js                 # Alpine.js component: login, config, products/services/listings, orders/bookings/inquiries
     js/alpine.min.js           # vendored from npm, not a CDN script tag
-  public/                  # base-domain marketing + signup page (afrexpay.com, no subdomain)
+  public/                  # base-domain marketing + signup page (afrexpay.app, no subdomain)
     index.html
     reset.html                # password reset landing page
     css/style.css
@@ -78,13 +79,13 @@ no CORS to manage.
 
 ### Signup flow
 
-`afrexpay.com` (the base domain, no subdomain) serves a marketing page with a
+`afrexpay.app` (the base domain, no subdomain) serves a marketing page with a
 signup form. On success, the merchant is handed a link to
-`<their-subdomain>.afrexpay.com/admin`. This surfaced a real bug worth
+`<their-subdomain>.afrexpay.app/admin`. This surfaced a real bug worth
 knowing about: the session cookie is set during signup, on the base domain,
 but needs to work on the merchant's own subdomain afterward — a host-only
-cookie set on `afrexpay.com` is never sent to `256-merch.afrexpay.com`. The
-fix is scoping the cookie to `.afrexpay.com` (via `BASE_DOMAIN` in `.env`),
+cookie set on `afrexpay.app` is never sent to `256-merch.afrexpay.app`. The
+fix is scoping the cookie to `.afrexpay.app` (via `BASE_DOMAIN` in `.env`),
 which is what actually lets a merchant sign up and land in a working
 dashboard in one flow.
 
@@ -635,6 +636,41 @@ Copy `themes/hangtag/` to `themes/<new-slug>/`, redesign `index.html` +
 Any tenant's `theme_slug` in `store_configs` can then point at it — the
 `theme-server` middleware picks it up automatically, no code change needed.
 
+## Storefront SEO & discovery
+
+Storefront themes are static SPA shells — without help, a crawler sees an
+empty page. The SEO engine closes that gap per tenant, with nothing
+merchant-specific forked per theme:
+
+- **Per-request `<head>` injection** (`theme-server.js` + `src/lib/seo.js`):
+  title, meta description, canonical (verified custom domain wins, else
+  `https://<subdomain>.afrexpay.app`), Open Graph / Twitter, and a `Store`
+  JSON-LD block — all escaped, so merchant copy can never break out of the
+  markup. Honors `config.noindex` per store.
+- **Crawl files per storefront host**: `GET /robots.txt` (allows `/`,
+  disallows `/admin`, `/api/`, `/media/`, points at the store sitemap) and
+  `GET /sitemap.xml` (home + every indexable entity with `lastmod`). Both
+  are mounted before the storefront catch-all, which would otherwise serve
+  `index.html` with a 200 for those paths. The base domain serves static
+  `public/robots.txt` + `public/sitemap.xml` instead (before tenant
+  resolution), with full OG/Twitter/JSON-LD head on the marketing page.
+- **Dashboards are never indexed**: `admin/index.html` carries
+  `noindex, nofollow`, every `/admin*` response sends an `X-Robots-Tag`
+  header, and no dashboard URL appears in any sitemap or feed.
+- **Crawlable detail URLs**: `/p/:slug`, `/s/:slug`, `/l/:slug` with
+  per-entity heads and typed JSON-LD (`Product` / `Service` /
+  `RealEstateListing` + `Offer`, zero-decimal-aware pricing, stock-derived
+  availability, cover-photo OG image). Unknown slugs return a real 404 with
+  a noindex shell, never a soft-404 200. Slugs (`UNIQUE(tenant_id, slug)`)
+  are minted once from name/title at create time and stay stable across
+  renames; public JSON companions live at
+  `GET /api/products|services|listings/slug/:slug`.
+- **Next (agentic shopping track)**: product feeds (Google-Merchant- and
+  ACP-compatible), per-store `llms.txt` + capability profile, and a
+  read-only agent API over the existing catalog — so AI shopping assistants
+  can discover and reason about any storefront without new checkout
+  plumbing (checkout stays the existing Stripe/PayPal redirect flow).
+
 ## Running it
 
 Postgres runs in a podman container; the app itself runs under pm2 (`ecosystem.config.js`,
@@ -676,7 +712,7 @@ npm run dev
 ```
 
 Subdomains don't exist on localhost, so either:
-- send a real `Host` header: `curl -H "Host: 256-merch.afrexpay.com" localhost:3000/api/products`
+- send a real `Host` header: `curl -H "Host: 256-merch.afrexpay.app" localhost:3000/api/products`
 - or append `?tenant=256-merch` to any request — the resolver checks this first
 
 ## Pipeline & releases
@@ -708,17 +744,19 @@ endpoint/feature, fix. The `version` in `package.json` moves with the tag.
 - `GET /api/config` — public, `{ config, theme_slug }` for the resolved tenant
 - `PATCH /api/config` — merchant-only, partial jsonb merge
 - `GET /api/products` — public catalog, accepts `?search=&limit=&offset=&dir=` (search covers SKU, name, category)
+- `GET /api/products/slug/:slug` — public detail for crawlable `/p/:slug` storefront URLs (active products only)
 - `POST /api/products` / `PATCH /api/products/:id` / `DELETE /api/products/:id` — merchant-only (delete is a soft-deactivate)
 - `POST /api/orders` — public, re-validates price/size/stock server-side, decrements stock transactionally
 - `POST /api/orders/:id/checkout` — public, creates a Stripe Checkout session for an existing order, returns the redirect URL
 - `GET /api/orders` — merchant-only, that tenant's orders (includes `payment_status`); accepts `?search=&status=&limit=&offset=&dir=` (`status` in `pending|confirmed|fulfilled|cancelled`, matching the `order_status` enum)
 - `PATCH /api/orders/:id` — merchant-only fulfil/cancel, `{ status }` from the same enum; 404 for other tenants' orders. The payment webhook remains the only writer of `payment_status`
-- `POST /api/media` — merchant-only, multipart upload, links to a product if `productId` is given
+- `POST /api/media` — merchant-only, multipart upload, links via `entityType` + `entityId` (`product`/`service`/`listing`); JPEG/PNG/WebP only, 2MB max
 - `POST /api/matrix/connect` — merchant-only, `{ matrixUserId }` → creates/reuses a room and invites them, no room ID ever handled client-side
 - `POST /api/auth/request-password-reset` / `POST /api/auth/reset-password` — always returns a generic message regardless of whether the email exists
 - `GET /api/config/themes` — merchant-only, list of installed theme slugs + current
 - `PATCH /api/config/theme` — merchant-only, `{ themeSlug }`, validated against the on-disk whitelist
 - `GET /api/services` — public list, accepts `?search=&limit=&offset=&dir=`; `POST` / `PATCH /:id` / `DELETE /:id` — merchant-only
+- `GET /api/services/slug/:slug` — public detail for crawlable `/s/:slug` storefront URLs (active services only)
 - `GET /api/availability/windows` / `PUT /api/availability/windows` — merchant-only weekly hours (full replace, not patch)
 - `GET /api/availability/exceptions` / `POST /api/availability/exceptions` / `DELETE /api/availability/exceptions/:id` — merchant-only blackout/extra-hours dates; list accepts `?status=open|blocked&limit=&offset=&dir=`
 - `GET /api/availability/slots?serviceId=&date=` — public, computed free slots for a service on a date
@@ -727,6 +765,8 @@ endpoint/feature, fix. The `version` in `package.json` moves with the tag.
 - `GET /api/bookings` — merchant-only, accepts `?search=&status=&limit=&offset=&dir=`; `PATCH /api/bookings/:id` — merchant-only status update
 - `GET /api/config/verticals` — merchant-only, the vertical registry (labels, tabs, compatible themes)
 - `GET /api/listings` — public list, accepts `?search=&limit=&offset=&dir=`; `POST` / `PATCH /:id` / `DELETE /:id` — merchant-only
+- `GET /api/listings/slug/:slug` — public detail for crawlable `/l/:slug` storefront URLs (excludes `off_market`)
+- `GET /robots.txt` + `GET /sitemap.xml` — per-tenant crawl files (subdomains + verified custom domains); the base domain serves static `public/robots.txt` + `public/sitemap.xml` instead
 - `POST /api/inquiries` — public, no auth; `GET /api/inquiries` — merchant-only, accepts `?search=&limit=&offset=&dir=`
 - `GET /api/media/for/:entityType/:entityId` — public, all photos for a listing (or any entity)
 - `DELETE /api/media/:id` — merchant-only, tenant-scoped, removes DB row + file on disk
@@ -764,7 +804,7 @@ there is no `ORDER BY` injection surface. Shared parsing lives in
   built for a first client
 - Refunds — `payments.status` supports a `refunded` value in the schema,
   no endpoint or dashboard action triggers it yet
-- Marketplace / QR discovery layer — schema supports adding this without rework
+- ~~Marketplace / QR discovery layer — schema supports adding this without rework~~ — shipped (store QR half): per-store QR (`GET /api/store-qr`, public `GET /qr.svg` in every theme footer, dashboard card). A broader marketplace/discovery surface is still future work — see "Storefront SEO & discovery" below for the agentic-shopping track
 - Object storage for media (currently local disk under `data/media/` — fine
   at small scale, but a VPS disk failure would mean lost photos; swapping the
   `multer` disk storage engine for an S3-compatible one in `media.routes.js`

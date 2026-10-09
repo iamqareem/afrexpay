@@ -7,6 +7,7 @@
 // validators run at the route layer so every failure is a 400 with a
 // human message. Unit-tested.
 const { SUPPORTED_CURRENCIES } = require("./currency");
+const { slugError } = require("./slug");
 
 const LISTING_TYPES = ["sale", "rent"];
 const LISTING_STATUSES = ["active", "pending", "sold", "rented", "off_market"];
@@ -49,6 +50,7 @@ function validateProduct(body, { forUpdate }) {
     return "active must be a boolean (lets merchants reactivate a deactivated product).";
   }
   return (
+    slugError(b.slug) ||
     priceError(b.priceMinor, { required: !forUpdate }) ||
     currencyError(b.currency) ||
     optionalIntError(b.stockQty, "stockQty")
@@ -71,6 +73,7 @@ function validateListing(body, { forUpdate }) {
     }
   }
   return (
+    slugError(b.slug) ||
     priceError(b.priceMinor, { required: !forUpdate }) ||
     currencyError(b.currency) ||
     optionalIntError(b.depositAmountMinor, "depositAmountMinor") ||
@@ -91,6 +94,7 @@ function validateService(body, { forUpdate }) {
     return "durationMinutes (positive integer) is required.";
   }
   return (
+    slugError(b.slug) ||
     priceError(b.priceMinor, { required: !forUpdate }) ||
     currencyError(b.currency)
   );

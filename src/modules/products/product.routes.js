@@ -1,15 +1,26 @@
 // src/modules/products/product.routes.js
 const express = require("express");
 const authRequired = require("../../middleware/auth-required");
-const { listProducts, createProduct, updateProduct, deactivateProduct } = require("./product.service");
+const { listProducts, getProductBySlug, createProduct, updateProduct, deactivateProduct } = require("./product.service");
 const { validateProduct } = require("../../lib/catalog-validation");
 const { UUID_RE } = require("../../lib/validate");
+const { isValidSlug } = require("../../lib/slug");
 
 const router = express.Router();
 
 router.get("/", async (req, res) => {
   const products = await listProducts(req.tenant.id, req.query);
   res.json(products);
+});
+
+// Public detail for crawlable /p/:slug storefront URLs. Fixed "slug"
+// segment (not GET /:id): a future "fetch one product" GET /:id would
+// otherwise swallow /slug/<anything> depending on registration order.
+router.get("/slug/:slug", async (req, res) => {
+  if (!isValidSlug(req.params.slug)) return res.status(404).json({ error: "Product not found." });
+  const product = await getProductBySlug(req.tenant.id, req.params.slug);
+  if (!product) return res.status(404).json({ error: "Product not found." });
+  res.json(product);
 });
 
 router.post("/", authRequired, async (req, res) => {

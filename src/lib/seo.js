@@ -9,6 +9,15 @@
 // it into the served HTML with plain string replacement — no new runtime
 // dependency, no per-theme fork.
 const { storePublicUrl } = require("./store-qr");
+const { isZeroDecimal } = require("./currency");
+
+// Detail-URL prefixes: /p/:slug (products), /s/:slug (services),
+// /l/:slug (listings). Single-segment on purpose — they live under the
+// storefront catch-all in app.js, so two-segment paths would risk
+// colliding with future theme pages.
+const KIND_BY_PREFIX = { p: "product", s: "service", l: "listing" };
+const PATH_PREFIX_BY_KIND = { product: "p", service: "s", listing: "l" };
+const ENTITY_PATH_RE = /^\/(p|s|l)\/([A-Za-z0-9][A-Za-z0-9-]*)\/?$/;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -60,12 +69,13 @@ function canonicalUrlForRequest(tenant, req) {
   return `${base}${pagePath === "/" ? "/" : pagePath}`;
 }
 
-function buildStorefrontHeadTags({ title, description, canonicalUrl, robotsContent }) {
+function buildStorefrontHeadTags({ title, description, canonicalUrl, robotsContent, imageUrl }) {
+  // No <title> here — spliceHead owns the single title swap, so there is
+  // exactly one <title> in the served document.
   const t = escapeHtml(title);
   const d = escapeHtml(description);
   const c = escapeHtml(canonicalUrl);
   const lines = [
-    `<title>${t}</title>`,
     `<meta name="description" content="${d}" />`,
     robotsContent ? `<meta name="robots" content="${escapeHtml(robotsContent)}" />` : "",
     c ? `<link rel="canonical" href="${c}" />` : "",
@@ -73,11 +83,25 @@ function buildStorefrontHeadTags({ title, description, canonicalUrl, robotsConte
     `<meta property="og:title" content="${t}" />`,
     `<meta property="og:description" content="${d}" />`,
     c ? `<meta property="og:url" content="${c}" />` : "",
-    `<meta name="twitter:card" content="summary" />`,
+    imageUrl ? `<meta property="og:image" content="${escapeHtml(imageUrl)}" />` : "",
+    `<meta name="twitter:card" content="${imageUrl ? "summary_large_image" : "summary"}" />`,
     `<meta name="twitter:title" content="${t}" />`,
     `<meta name="twitter:description" content="${d}" />`,
   ].filter(Boolean);
   return lines.join("\n  ");
+}
+
+// JSON-LD script body escaping, shared by every JSON-LD builder: <, > and
+// & are unicode-escaped so merchant-controlled strings can never break out
+// of the script block (script content is CDATA-ish — only </script> ends
+// it, but < also starts <!-- weirdness in old parsers; belt and braces).
+function safeJsonLd(data) {
+  const json = JSON.stringify(data)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/<\/script/gi, "<\\/script");
+  return `<script type="application/ld+json">${json}</script>`;
 }
 
 function buildStoreJsonLd({ name, description, canonicalBase }) {
@@ -88,15 +112,19 @@ function buildStoreJsonLd({ name, description, canonicalBase }) {
     url: String(canonicalBase || ""),
     description: String(description || ""),
   };
-  // JSON.stringify is safe inside <script type="application/ld+json"> except
-  // for HTML-significant chars — escape <, >, & and the literal </script>
-  // sequence so a merchant's tagline can never break out of the JSON block.
-  const json = JSON.stringify(data)
-    .replace(/</g, "\\u003c")
-    .replace(/>/g, "\\u003e")
-    .replace(/&/g, "\\u0026")
-    .replace(/<\/script/gi, "<\\/script");
-  return `<script type="application/ld+json">${json}</script>`;
+  return safeJsonLd(data);
+}
+
+// Shared splice: swap the placeholder <title>, inject tags before </head>.
+function spliceHead(html, title, injection) {
+  let out = String(html);
+  out = out.replace(/<title[^>]*>.*?<\/title>/is, `<title>${escapeHtml(title)}</title>`);
+  if (/<\/head>/i.test(out)) {
+    out = out.replace(/<\/head>/i, `${injection}</head>`);
+  } else {
+    out = `${injection}${out}`;
+  }
+  return out;
 }
 
 // Replace the placeholder <title> and inject tags before </head>.
@@ -112,16 +140,94 @@ function injectSeoIntoHtml(html, { tenant, canonicalUrl }) {
     description,
     canonicalBase: canonicalUrl ? canonicalUrl.replace(/\/+$/, "").split("/").slice(0, 3).join("/") + "/" : "",
   });
-  const injection = `  ${tags}\n  ${jsonLd}\n  `;
+  return spliceHead(html, title, `  ${tags}\n  ${jsonLd}\n  `);
+}
 
-  let out = String(html);
-  out = out.replace(/<title[^>]*>.*?<\/title>/is, `<title>${escapeHtml(title)}</title>`);
-  if (/<\/head>/i.test(out)) {
-    out = out.replace(/<\/head>/i, `${injection}</head>`);
-  } else {
-    out = `${injection}${out}`;
+// ---- per-entity detail SEO (/p/:slug, /s/:slug, /l/:slug) ----
+
+function getEntityName(entity, kind) {
+  if (!entity) return "Item";
+  if (kind === "listing") return entity.title || "Listing";
+  return entity.name || "Item";
+}
+
+function getEntityDescription(entity, kind) {
+  if (!entity) return "";
+  if (kind === "product") return entity.blurb || entity.category || "";
+  if (kind === "service") return entity.description || "";
+  return entity.description || entity.location || "";
+}
+
+// Meta descriptions truncate in search results (~155 chars) — keep the tag
+// short at the source instead of shipping a paragraph crawlers cut anyway.
+function truncateDescription(text, maxLength = 155) {
+  const s = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (s.length <= maxLength) return s;
+  return `${s.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+// Minor-unit price (as stored) to the major-unit string JSON-LD wants,
+// honoring the zero-decimal set (UGX/JPY have no fractional unit).
+function minorToMajor(priceMinor, currency) {
+  const minor = Number(priceMinor);
+  if (!Number.isFinite(minor)) return "0";
+  if (isZeroDecimal(currency)) return String(Math.round(minor));
+  return (minor / 100).toFixed(2);
+}
+
+function absoluteMediaUrl(canonicalBase, storagePath) {
+  if (!storagePath) return "";
+  const base = String(canonicalBase || "").replace(/\/+$/, "");
+  if (!base) return "";
+  return `${base}/media/${encodeURIComponent(String(storagePath))}`;
+}
+
+function buildEntityJsonLd({ kind, entity, canonicalUrl, imageUrl }) {
+  const name = getEntityName(entity, kind);
+  const description = getEntityDescription(entity, kind);
+  const offers = {
+    "@type": "Offer",
+    priceCurrency: String(entity?.currency || "UGX"),
+    price: minorToMajor(entity?.price_minor ?? entity?.priceMinor ?? 0, entity?.currency),
+    url: String(canonicalUrl || ""),
+  };
+  if (kind === "product") {
+    // NULL stock means untracked (infinite for SEO purposes), not zero.
+    const qty = entity?.stock_qty ?? entity?.stockQty;
+    offers.availability =
+      qty === null || qty === undefined || Number(qty) > 0
+        ? "https://schema.org/InStock"
+        : "https://schema.org/OutOfStock";
   }
-  return out;
+  if (kind === "listing" && ["sold", "rented"].includes(entity?.status)) {
+    offers.availability = "https://schema.org/OutOfStock";
+  }
+  const data = {
+    "@context": "https://schema.org",
+    "@type": kind === "product" ? "Product" : kind === "service" ? "Service" : "RealEstateListing",
+    name: String(name),
+    url: String(canonicalUrl || ""),
+    ...(description ? { description: String(description) } : {}),
+    ...(imageUrl ? { image: [String(imageUrl)] } : {}),
+    offers,
+  };
+  if (kind === "listing" && entity?.location) {
+    data.address = { "@type": "PostalAddress", addressLocality: String(entity.location) };
+  }
+  return safeJsonLd(data);
+}
+
+function getEntityTitle(tenant, kind, entity) {
+  return `${getEntityName(entity, kind)} — ${getStoreName(tenant)}`;
+}
+
+function injectEntitySeoIntoHtml(html, { tenant, kind, entity, canonicalUrl, imageUrl }) {
+  const title = getEntityTitle(tenant, kind, entity);
+  const description = truncateDescription(getEntityDescription(entity, kind) || getStoreDescription(tenant));
+  const robotsContent = tenant?.config?.noindex ? "noindex, nofollow" : "";
+  const tags = buildStorefrontHeadTags({ title, description, canonicalUrl, robotsContent, imageUrl });
+  const jsonLd = buildEntityJsonLd({ kind, entity, canonicalUrl, imageUrl });
+  return spliceHead(html, title, `  ${tags}\n  ${jsonLd}\n  `);
 }
 
 function buildTenantRobotsTxt(canonicalBase) {
@@ -139,20 +245,31 @@ function buildTenantRobotsTxt(canonicalBase) {
     .join("\n");
 }
 
-// PR1 minimal sitemap: home only, so /sitemap.xml is valid XML instead of
-// falling through to the storefront HTML shell. PR2 expands this with
-// per-entity URLs once slugs + detail routes land.
-function buildTenantSitemapXml(canonicalBase) {
+// entries: [{ loc, lastmod?, changefreq?, priority? }]. Defaults to home
+// only (PR1 shape) so callers without catalog access still emit valid XML.
+function buildTenantSitemapXml(canonicalBase, entries) {
   const base = String(canonicalBase || "").replace(/\/+$/, "");
-  const loc = base ? `${base}/` : "/";
+  const urls =
+    entries && entries.length
+      ? entries
+      : [{ loc: base ? `${base}/` : "/", changefreq: "daily", priority: "1.0" }];
+  const body = urls
+    .map((entry) => {
+      const lines = [
+        "  <url>",
+        `    <loc>${escapeHtml(entry.loc)}</loc>`,
+        entry.lastmod ? `    <lastmod>${escapeHtml(entry.lastmod)}</lastmod>` : "",
+        entry.changefreq ? `    <changefreq>${escapeHtml(entry.changefreq)}</changefreq>` : "",
+        entry.priority ? `    <priority>${escapeHtml(entry.priority)}</priority>` : "",
+        "  </url>",
+      ].filter(Boolean);
+      return lines.join("\n");
+    })
+    .join("\n");
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    "  <url>",
-    `    <loc>${escapeHtml(loc)}</loc>`,
-    "    <changefreq>daily</changefreq>",
-    "    <priority>1.0</priority>",
-    "  </url>",
+    body,
     "</urlset>",
     "",
   ].join("\n");
@@ -160,6 +277,9 @@ function buildTenantSitemapXml(canonicalBase) {
 
 module.exports = {
   escapeHtml,
+  KIND_BY_PREFIX,
+  PATH_PREFIX_BY_KIND,
+  ENTITY_PATH_RE,
   getStoreName,
   getStoreDescription,
   getSeoTitle,
@@ -167,7 +287,16 @@ module.exports = {
   canonicalUrlForRequest,
   buildStorefrontHeadTags,
   buildStoreJsonLd,
+  safeJsonLd,
   injectSeoIntoHtml,
+  getEntityName,
+  getEntityDescription,
+  truncateDescription,
+  minorToMajor,
+  absoluteMediaUrl,
+  buildEntityJsonLd,
+  getEntityTitle,
+  injectEntitySeoIntoHtml,
   buildTenantRobotsTxt,
   buildTenantSitemapXml,
 };

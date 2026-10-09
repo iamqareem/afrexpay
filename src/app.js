@@ -163,10 +163,31 @@ app.get("/robots.txt", (req, res) => {
   const canonicalBase = canonicalBaseForTenant(req.tenant, req.headers.host);
   res.type("text/plain").send(buildTenantRobotsTxt(canonicalBase));
 });
-app.get("/sitemap.xml", (req, res) => {
-  const { canonicalBaseForTenant, buildTenantSitemapXml } = require("./lib/seo");
-  const canonicalBase = canonicalBaseForTenant(req.tenant, req.headers.host);
-  res.type("application/xml").send(buildTenantSitemapXml(canonicalBase));
+app.get("/sitemap.xml", async (req, res) => {
+  const { canonicalBaseForTenant, buildTenantSitemapXml, PATH_PREFIX_BY_KIND } = require("./lib/seo");
+  const { listSitemapEntries } = require("./modules/discovery/discovery.service");
+  const canonicalBase = canonicalBaseForTenant(req.tenant, req.headers.host).replace(/\/+$/, "");
+  let entries;
+  try {
+    const rows = await listSitemapEntries(req.tenant.id);
+    entries = [{ loc: `${canonicalBase}/`, changefreq: "daily", priority: "1.0" }];
+    for (const row of rows) {
+      const prefix = PATH_PREFIX_BY_KIND[row.kind];
+      if (!prefix || !row.slug) continue;
+      entries.push({
+        loc: `${canonicalBase}/${prefix}/${row.slug}`,
+        ...(row.updated_at ? { lastmod: new Date(row.updated_at).toISOString().slice(0, 10) } : {}),
+        changefreq: "weekly",
+        priority: "0.8",
+      });
+    }
+  } catch (dbErr) {
+    // The sitemap must stay valid XML even when the catalog query fails —
+    // crawlers retry a home-only sitemap, they choke on a 500.
+    console.error("Tenant sitemap entries failed:", dbErr.message);
+    entries = undefined; // home-only default in buildTenantSitemapXml
+  }
+  res.type("application/xml").send(buildTenantSitemapXml(canonicalBase, entries));
 });
 
 // Everything else is the public storefront — theme picked per tenant.
