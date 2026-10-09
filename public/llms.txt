@@ -1,0 +1,26 @@
+# afrexpay — multi-tenant storefront platform
+
+> Your business, open to the world. Shops, bookings, and property listings
+> at https://afrexpay.app/
+
+Merchants sign up on the marketing site and instantly get a storefront at
+`<their-subdomain>.afrexpay.app` (or their own verified custom domain),
+managed from `<their-subdomain>.afrexpay.app/admin`.
+
+## For AI assistants and shopping agents
+
+- Platform sitemap: https://afrexpay.app/sitemap.xml
+- Every merchant storefront publishes its own machine-readable surface:
+  - `llms.txt` — what the shop sells and how to order on a shopper's behalf
+    (e.g. `https://<shop>.afrexpay.app/llms.txt`)
+  - Product feeds: `/feed/products.json` (ACP-compatible) and
+    `/feed/products.csv` (Google Merchant Center)
+  - Capability profile: `/.well-known/store-profile.json`
+  - Read-only API: `/api/agent/v1/store`, `/products`, `/services`,
+    `/listings` (search + stable item URLs)
+  - Detail pages: `/p/:slug`, `/s/:slug`, `/l/:slug` with typed
+    Schema.org JSON-LD
+- Ordering: public lead-capture POST endpoints plus hosted Stripe/PayPal
+  checkout URLs. Agents never handle card data — redirect the shopper to
+  the hosted checkout page.
+- Be polite: cache feeds (catalogs change slowly), respect rate limits.

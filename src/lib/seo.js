@@ -275,6 +275,47 @@ function buildTenantSitemapXml(canonicalBase, entries) {
   ].join("\n");
 }
 
+// Per-store llms.txt: a plain-text map of the shop for AI assistants —
+// what it sells, where the machine-readable catalog lives, and the rules
+// for ordering on a shopper's behalf. Crawlers fetch it like robots.txt.
+function buildTenantLlmsTxt(tenant, { canonicalBase, currency, counts } = {}) {
+  const base = String(canonicalBase || "").replace(/\/+$/, "");
+  const name = getStoreName(tenant);
+  const description = getStoreDescription(tenant);
+  const vertical = tenant?.config?.vertical || "products";
+  const lines = [
+    `# ${name}`,
+    `> ${description}`,
+    `> Shop: ${base}/`,
+    "",
+    "## Catalog feeds",
+    `- Products (JSON): ${base}/feed/products.json`,
+    `- Products (Google Merchant CSV): ${base}/feed/products.csv`,
+    `- Sitemap: ${base}/sitemap.xml`,
+    ...(counts
+      ? [`> ${counts.product} products · ${counts.service} services · ${counts.listing} listings (vertical: ${vertical})`]
+      : []),
+    "",
+    "## Agent API (read-only JSON)",
+    `- Store: GET ${base}/api/agent/v1/store`,
+    `- Search products: GET ${base}/api/agent/v1/products?search=&limit=`,
+    `- Search services: GET ${base}/api/agent/v1/services?search=&limit=`,
+    `- Search listings: GET ${base}/api/agent/v1/listings?search=&limit=`,
+    `- Detail pages: ${base}/p/:slug, ${base}/s/:slug, ${base}/l/:slug`,
+    "",
+    "## Ordering on a shopper's behalf",
+    `- Place orders: POST ${base}/api/orders (public lead capture, same as the storefront form).`,
+    `- Card payment: POST ${base}/api/orders/:id/checkout returns a hosted Stripe/PayPal URL — redirect the shopper there. Never ask for card details inside chat.`,
+    `- Availability and prices change: re-check the feed or API before promising anything.`,
+    "",
+    "## Rules",
+    `- Currency: ${currency || "see API"}.`,
+    "- Cache feeds; be polite (automated clients are rate-limited).",
+    "",
+  ];
+  return lines.join("\n");
+}
+
 module.exports = {
   escapeHtml,
   KIND_BY_PREFIX,
@@ -299,4 +340,5 @@ module.exports = {
   injectEntitySeoIntoHtml,
   buildTenantRobotsTxt,
   buildTenantSitemapXml,
+  buildTenantLlmsTxt,
 };

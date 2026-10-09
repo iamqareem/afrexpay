@@ -29,6 +29,8 @@ const stripeWebhookRoutes = require("./modules/payments/webhook.routes");
 const domainRoutes = require("./modules/domains/domain.routes");
 const domainAskRoutes = require("./modules/domains/ask.routes");
 const { router: storeQrRouter, serveQrSvg } = require("./modules/store-qr/store-qr.routes");
+const discoveryRoutes = require("./modules/discovery/discovery.routes");
+const agentRoutes = require("./modules/discovery/agent.routes");
 
 const app = express();
 
@@ -134,6 +136,16 @@ app.use("/api/listing-reservations", reservationRoutes);
 app.use("/api/payments/credentials", paymentCredentialsRoutes);
 app.use("/api/domains", domainRoutes);
 app.use("/api/store-qr", storeQrRouter);
+
+// Read-only agent API (v1): stable JSON over the public catalog for AI
+// shopping assistants. Tenant-scoped like everything else under the
+// resolver; rate-limited inside the router (feedLimiter).
+app.use("/api/agent/v1", agentRoutes);
+
+// Machine-readable storefront surface (feeds, llms.txt, capability
+// profile). Root paths needing req.tenant — same catch-all-beating
+// placement rule as /qr.svg and /robots.txt below.
+app.use(discoveryRoutes);
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, tenant: req.tenant.subdomain });

@@ -665,11 +665,16 @@ merchant-specific forked per theme:
   are minted once from name/title at create time and stay stable across
   renames; public JSON companions live at
   `GET /api/products|services|listings/slug/:slug`.
-- **Next (agentic shopping track)**: product feeds (Google-Merchant- and
-  ACP-compatible), per-store `llms.txt` + capability profile, and a
-  read-only agent API over the existing catalog — so AI shopping assistants
-  can discover and reason about any storefront without new checkout
-  plumbing (checkout stays the existing Stripe/PayPal redirect flow).
+- **Next (agentic shopping track)**: ~~product feeds, per-store `llms.txt`,
+  and a read-only agent API~~ — shipped: `GET /feed/products.json`
+  (ACP-compatible) + `GET /feed/products.csv` (Google Merchant),
+  per-store `GET /llms.txt` and `GET /.well-known/store-profile.json`,
+  platform `public/llms.txt`, and `GET /api/agent/v1/store|products|
+  services|listings` (same visibility rules as the public catalog, absolute
+  detail URLs, rate-limited). Checkout stays the existing Stripe/PayPal
+  hosted redirect — agents hand shoppers off, they never take card data.
+  Still future: delegated/agent-completed payments and per-agent
+  order-preview before placement.
 
 ## Running it
 
@@ -767,6 +772,9 @@ endpoint/feature, fix. The `version` in `package.json` moves with the tag.
 - `GET /api/listings` — public list, accepts `?search=&limit=&offset=&dir=`; `POST` / `PATCH /:id` / `DELETE /:id` — merchant-only
 - `GET /api/listings/slug/:slug` — public detail for crawlable `/l/:slug` storefront URLs (excludes `off_market`)
 - `GET /robots.txt` + `GET /sitemap.xml` — per-tenant crawl files (subdomains + verified custom domains); the base domain serves static `public/robots.txt` + `public/sitemap.xml` instead
+- `GET /feed/products.json` + `GET /feed/products.csv` — public product feeds (ACP-compatible JSON, Google Merchant CSV)
+- `GET /llms.txt` + `GET /.well-known/store-profile.json` — per-tenant assistant map + capability profile
+- `GET /api/agent/v1/store|products|services|listings` — public read-only agent API over the catalog (same visibility rules, absolute detail URLs)
 - `POST /api/inquiries` — public, no auth; `GET /api/inquiries` — merchant-only, accepts `?search=&limit=&offset=&dir=`
 - `GET /api/media/for/:entityType/:entityId` — public, all photos for a listing (or any entity)
 - `DELETE /api/media/:id` — merchant-only, tenant-scoped, removes DB row + file on disk

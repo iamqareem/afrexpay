@@ -26,4 +26,15 @@ const slotsLimiter = rateLimit({
   message: { error: "Too many requests from this address. Try again in a few minutes." },
 });
 
-module.exports = { publicWriteLimiter, slotsLimiter };
+// Machine consumers (feeds, llms.txt, agent API): bulk-shaped reads polled
+// by crawlers and assistants. Generous — Merchant Center fetches daily,
+// agents occasionally — but still bounded so one scraper can't loop forever.
+const feedLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests from this address. Try again in a few minutes." },
+});
+
+module.exports = { publicWriteLimiter, slotsLimiter, feedLimiter };
