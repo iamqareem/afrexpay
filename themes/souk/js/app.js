@@ -1,15 +1,38 @@
 // app.js — vanilla JS, no framework. Talks to /api/config, /api/products, /api/orders
 // on whatever subdomain this theme is being served under.
 // Souk: fragrance (attar, oud, musk, sprays) + modest attire (thobe, abaya,
-// hijab). Category chips filter the grid by product.category.
+// hijab). Category chips filter the grid by product.category; the spotlight
+// rail showcases one category (merchant-pinned via config.spotlightCategory,
+// else the largest); the hero shows config.heroImageUrl, else the first
+// cover photo, else CSS default art. Light/dark follows the listing themes.
 
 const state = {
   config: null,
   products: [],
+  covers: {}, // productId -> storage_path|null (one batched lookup, reused by grid + rail)
   cart: [], // { productId, name, size, qty, priceMinor }
   lastOrderId: null, // the just-placed order — used by the pay-now button
   activeCategory: "All",
 };
+
+function initTheme() {
+  // Same graceful default as the listing themes: saved choice wins,
+  // otherwise follow the OS, otherwise the dark luxe this theme is known for.
+  const saved = (() => { try { return localStorage.getItem("theme"); } catch { return null; } })();
+  const theme = saved || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  applyTheme(theme);
+  document.getElementById("theme-toggle").addEventListener("click", () => {
+    const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+    try { localStorage.setItem("theme", next); } catch {}
+    applyTheme(next);
+  });
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  const icon = document.getElementById("theme-toggle-icon");
+  if (icon) icon.textContent = theme === "light" ? "☀" : "🌙";
+}
 
 // Zero-decimal mirror of src/lib/currency.js (static bundles can't require
 // node modules — keep in sync, both point at the Stripe list).
@@ -47,54 +70,71 @@ function applyConfig(config) {
   if (config.accentColor2) document.documentElement.style.setProperty("--accent2", config.accentColor2);
 }
 
+function categoryOf(p) {
+  return p.category || "Uncategorized";
+}
+
+function categoryCounts() {
+  const counts = new Map();
+  for (const p of state.products) {
+    const c = categoryOf(p);
+    counts.set(c, (counts.get(c) || 0) + 1);
+  }
+  return counts;
+}
+
 function visibleProducts() {
   if (state.activeCategory === "All") return state.products;
-  return state.products.filter((p) => (p.category || "Uncategorized") === state.activeCategory);
+  return state.products.filter((p) => categoryOf(p) === state.activeCategory);
+}
+
+function setCategory(cat, { scroll = false } = {}) {
+  state.activeCategory = cat;
+  renderCategoryChips();
+  renderProducts();
+  if (scroll) {
+    const el = document.getElementById("product-count");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 function renderCategoryChips() {
   const container = document.getElementById("category-chips");
-  const cats = ["All", ...new Set(state.products.map((p) => p.category || "Uncategorized"))];
+  const counts = categoryCounts();
+  const cats = ["All", ...counts.keys()];
   if (!cats.includes(state.activeCategory)) state.activeCategory = "All";
+  const label = (c) => (c === "All" ? `All · ${state.products.length}` : `${c} · ${counts.get(c)}`);
   container.innerHTML = cats
-    .map((c) => `<button class="souk-chip${c === state.activeCategory ? " active" : ""}" data-cat="${esc(c)}">${esc(c)}</button>`)
+    .map((c) => `<button class="souk-chip${c === state.activeCategory ? " active" : ""}" data-cat="${esc(c)}">${esc(label(c))}</button>`)
     .join("");
   container.querySelectorAll("[data-cat]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      state.activeCategory = btn.getAttribute("data-cat");
-      renderCategoryChips();
-      renderProducts();
-    });
+    btn.addEventListener("click", () => setCategory(btn.getAttribute("data-cat")));
   });
 }
 
-async function renderProducts() {
-  const grid = document.getElementById("product-grid");
-  const items = visibleProducts();
-  document.getElementById("product-count").textContent = `${items.length} PIECE${items.length === 1 ? "" : "S"}`;
-
-  // One photo lookup per product, in parallel — same pattern used by the
-  // other product themes. There is no image_path column on products;
-  // every vertical fetches its photos the same way.
-  const photosByProduct = await Promise.all(
-    items.map((p) =>
-      fetch(`/api/media/for/product/${p.id}`)
-        .then((r) => (r.ok ? r.json() : []))
-        .then((photos) => photos[0]?.storage_path || null)
-        .catch(() => null)
-    )
-  );
-
-  if (items.length === 0) {
-    grid.innerHTML = `<p class="text-muted text-center py-10 col-span-full">Nothing here yet — check back soon.</p>`;
-    return;
+// Spotlight: one category showcased above the grid ("The Attar Edit" for
+// a merchant who pins spotlightCategory: "Attar"). Generic machinery —
+// the category name always comes from data or merchant config, never
+// from a hardcoded string. Falls back to the largest category; hidden
+// when the catalog has fewer than two categories to choose between.
+function spotlightInfo() {
+  const counts = categoryCounts();
+  if (counts.size < 2) return null;
+  const pinned = (state.config?.spotlightCategory || "").trim().toLowerCase();
+  let name = null;
+  if (pinned) {
+    name = [...counts.keys()].find((c) => c.toLowerCase() === pinned) || null;
   }
+  if (!name) name = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const items = state.products.filter((p) => categoryOf(p) === name);
+  if (items.length === 0) return null;
+  return { name, items };
+}
 
-  grid.innerHTML = items
-    .map((p, i) => {
-      const photo = photosByProduct[i];
-      const img = photo ? `/media/${photo}` : null;
-      return `
+function cardHtml(p) {
+  const photo = state.covers[p.id];
+  const img = photo ? `/media/${photo}` : null;
+  return `
     <div class="souk-card">
       ${img ? `<img src="${img}" alt="${esc(p.name)}" loading="lazy" onerror="this.style.display='none'" class="w-full aspect-[4/5] object-cover" />` : `<div class="w-full aspect-[4/5] bg-surface2"></div>`}
       <div class="px-5 pt-4 pb-3">
@@ -115,16 +155,85 @@ async function renderProducts() {
         </button>
       </div>
     </div>`;
-    })
-    .join("");
+}
 
-  grid.querySelectorAll("[data-add]").forEach((btn) => {
+function wireAddButtons(root) {
+  root.querySelectorAll("[data-add]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-add");
-      const sizeSelect = grid.querySelector(`[data-size-for="${id}"]`);
+      const sizeSelect = root.querySelector(`[data-size-for="${id}"]`);
       addToCart(id, sizeSelect.value);
     });
   });
+}
+
+function renderSpotlight() {
+  const section = document.getElementById("spotlight");
+  const info = spotlightInfo();
+  if (!info) {
+    section.classList.add("hidden");
+    return;
+  }
+  section.classList.remove("hidden");
+  document.getElementById("spotlight-title").textContent = `The ${info.name} Edit`;
+  document.getElementById("spotlight-sub").textContent = `${info.items.length} PIECE${info.items.length === 1 ? "" : "S"} · SWIPE →`;
+  const rail = document.getElementById("spotlight-rail");
+  rail.innerHTML = info.items.map(cardHtml).join("");
+  wireAddButtons(rail);
+  document.getElementById("spotlight-all").onclick = () => setCategory(info.name, { scroll: true });
+}
+
+async function loadCovers() {
+  // One photo lookup per product, in parallel, once — grid filtering and
+  // the spotlight rail then render from cache instead of refetching.
+  // There is no image_path column on products; every vertical fetches its
+  // photos the same way.
+  const entries = await Promise.all(
+    state.products.map((p) =>
+      fetch(`/api/media/for/product/${p.id}`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((photos) => [p.id, photos[0]?.storage_path || null])
+        .catch(() => [p.id, null])
+    )
+  );
+  state.covers = Object.fromEntries(entries);
+}
+
+async function resolveHeroImage() {
+  // Merchant override first, then the catalog's first cover photo, then
+  // nothing (the CSS default artwork carries the hero).
+  const override = (state.config?.heroImageUrl || "").trim();
+  if (override) return override;
+  const first = state.products[0];
+  const cover = first ? state.covers[first.id] : null;
+  return cover ? `/media/${cover}` : null;
+}
+
+async function renderHero() {
+  const img = document.getElementById("hero-image");
+  const src = await resolveHeroImage();
+  if (!src) {
+    img.classList.add("hidden");
+    return;
+  }
+  img.onerror = () => img.classList.add("hidden");
+  img.alt = `${state.config?.storeName || "Store"} showcase`;
+  img.src = src;
+  img.classList.remove("hidden");
+}
+
+function renderProducts() {
+  const grid = document.getElementById("product-grid");
+  const items = visibleProducts();
+  document.getElementById("product-count").textContent = `${items.length} PIECE${items.length === 1 ? "" : "S"}`;
+
+  if (items.length === 0) {
+    grid.innerHTML = `<p class="text-muted text-center py-10 col-span-full">Nothing here yet — check back soon.</p>`;
+    return;
+  }
+
+  grid.innerHTML = items.map(cardHtml).join("");
+  wireAddButtons(grid);
 }
 
 function addToCart(productId, size) {
@@ -295,14 +404,28 @@ async function handleCheckoutSubmit(e) {
 }
 
 async function init() {
+  initTheme();
   const configRes = await fetch("/api/config");
   const { config } = await configRes.json();
   applyConfig(config || {});
 
   const res = await fetch("/api/products");
   state.products = await res.json();
+
+  // Deep-linkable filter (?category=attar) — matched case-insensitively
+  // against real categories, ignored when it names nothing.
+  const query = new URLSearchParams(window.location.search);
+  const wanted = (query.get("category") || "").trim().toLowerCase();
+  if (wanted) {
+    const match = [...categoryCounts().keys()].find((c) => c.toLowerCase() === wanted);
+    if (match) state.activeCategory = match;
+  }
+
+  await loadCovers();
   renderCategoryChips();
-  await renderProducts();
+  renderProducts();
+  renderSpotlight();
+  await renderHero();
   renderCart();
 
   document.getElementById("cart-open").addEventListener("click", openCart);

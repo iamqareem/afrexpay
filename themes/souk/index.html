@@ -11,19 +11,36 @@
   <header class="sticky top-0 z-40 bg-ink/95 backdrop-blur border-b border-surface2">
     <div class="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
       <div class="font-display text-2xl tracking-tightest text-paper"><span id="brand-name"></span><span id="brand-accent" class="text-gold"></span></div>
-      <button id="cart-open" class="relative flex items-center gap-2 border border-surface2 rounded-full px-4 py-2 text-sm font-mono text-paper hover:border-gold transition-colors">
-        BASKET
-        <span id="cart-count" class="inline-flex items-center justify-center min-w-[1.5rem] h-6 rounded-full bg-gold text-ink text-xs font-bold px-1">0</span>
-      </button>
+      <div class="flex items-center gap-2">
+        <button id="theme-toggle" type="button" aria-label="Toggle light/dark theme" class="text-sm border border-surface2 rounded-full px-3 py-2 text-muted hover:text-paper transition-colors">
+          <span id="theme-toggle-icon">🌙</span>
+        </button>
+        <button id="cart-open" class="relative flex items-center gap-2 border border-surface2 rounded-full px-4 py-2 text-sm font-mono text-paper hover:border-gold transition-colors">
+          BASKET
+          <span id="cart-count" class="inline-flex items-center justify-center min-w-[1.5rem] h-6 rounded-full bg-gold text-ink text-xs font-bold px-1">0</span>
+        </button>
+      </div>
     </div>
   </header>
 
-  <section class="max-w-6xl mx-auto px-5 pt-16 pb-12 border-b border-surface2 text-center">
-    <p id="tagline" class="font-mono text-xs tracking-widest2 text-gold uppercase mb-4"></p>
-    <h1 class="font-display text-5xl md:text-7xl leading-[1.02] tracking-tightest text-paper max-w-3xl mx-auto">
-      <span id="hero-line1"></span><br/><span id="hero-line2" class="italic text-gold"></span>
-    </h1>
-    <p id="hero-subtitle" class="mt-6 max-w-xl mx-auto text-muted text-base md:text-lg"></p>
+  <section class="souk-hero-default border-b border-surface2">
+    <div class="max-w-6xl mx-auto px-5 pt-12 pb-12 text-center">
+      <img id="hero-image" alt="" loading="eager" class="hidden mx-auto mb-6 max-h-56 w-auto rounded-md border border-surface2 object-cover" />
+      <p id="tagline" class="font-mono text-xs tracking-widest2 text-gold uppercase mb-4"></p>
+      <h1 class="font-display text-5xl md:text-7xl leading-[1.02] tracking-tightest text-paper max-w-3xl mx-auto">
+        <span id="hero-line1"></span><br/><span id="hero-line2" class="italic text-gold"></span>
+      </h1>
+      <p id="hero-subtitle" class="mt-6 max-w-xl mx-auto text-muted text-base md:text-lg"></p>
+    </div>
+  </section>
+
+  <section id="spotlight" class="max-w-6xl mx-auto px-5 pt-12 hidden">
+    <div class="flex items-baseline justify-between mb-1">
+      <h2 id="spotlight-title" class="font-display text-2xl tracking-tightest text-paper"></h2>
+      <button id="spotlight-all" type="button" class="font-mono text-xs text-gold hover:underline uppercase tracking-widest2">Shop all →</button>
+    </div>
+    <p id="spotlight-sub" class="font-mono text-xs text-muted mb-5"></p>
+    <div id="spotlight-rail" class="souk-rail"></div>
   </section>
 
   <section class="max-w-6xl mx-auto px-5 py-12">
@@ -31,7 +48,7 @@
       <h2 class="font-display text-2xl tracking-tightest text-paper">THE COLLECTION</h2>
       <p id="product-count" class="font-mono text-xs text-muted"></p>
     </div>
-    <div id="category-chips" class="flex flex-wrap gap-2 mb-8"></div>
+    <div id="category-chips" class="souk-chips-bar mb-8"></div>
     <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
   </section>
 

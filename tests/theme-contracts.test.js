@@ -90,3 +90,32 @@ test("slot date defaults use local time, not UTC", () => {
     assert.ok(!themeSrc(f).includes("toISOString().slice(0, 10)"), `${f} must not default to the UTC date`);
   }
 });
+
+test("souk light/dark follows the listing-grid mechanism", () => {
+  const js = themeSrc("themes/souk/js/app.js");
+  const html = themeSrc("themes/souk/index.html");
+  const css = themeSrc("themes/souk/src/input.css");
+  const config = themeSrc("themes/souk/tailwind.config.js");
+  assert.ok(html.includes('id="theme-toggle"'), "header toggle present");
+  assert.ok(html.includes('id="theme-toggle-icon"'), "toggle icon present");
+  assert.ok(js.includes("function initTheme("), "initTheme defined");
+  assert.ok(js.includes('localStorage.getItem("theme")'), "shared theme key");
+  assert.ok(js.includes('setAttribute("data-theme"'), "data-theme switch");
+  assert.ok(css.includes('[data-theme="light"]'), "light override block");
+  assert.ok(config.includes("var(--ink,"), "palette rides CSS vars");
+  assert.ok(!/ink:\s*"#[0-9a-fA-F]{3,8}"/.test(config), "no static hex surface colors left");
+});
+
+test("souk hero cascade + spotlight are generic (no client hardcodes)", () => {
+  const js = themeSrc("themes/souk/js/app.js");
+  const html = themeSrc("themes/souk/index.html");
+  assert.ok(!/heena/i.test(js + html), "no client category string in souk source");
+  assert.ok(js.includes("spotlightCategory"), "spotlight pinned via merchant config");
+  assert.ok(js.includes("heroImageUrl"), "hero override via merchant config");
+  assert.ok(html.includes('id="hero-image"'), "hero image slot present");
+  assert.ok(html.includes('id="spotlight-rail"'), "spotlight rail present");
+  assert.ok(html.includes('id="spotlight-all"'), "spotlight shop-all present");
+  assert.ok(js.includes("souk-rail") || themeSrc("themes/souk/src/input.css").includes("souk-rail"), "rail styling present");
+  assert.ok(html.includes("souk-chips-bar"), "sticky chips bar present");
+  assert.ok(js.includes("category"), "deep-linkable ?category= supported");
+});

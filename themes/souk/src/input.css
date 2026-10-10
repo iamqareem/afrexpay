@@ -6,10 +6,25 @@
   :root {
     --accent: #C9963C;
     --accent2: #8A4B2A;
+
+    /* dark luxe (default) */
+    --ink: #171008;
+    --surface: #221709;
+    --surface2: #2E2010;
+    --paper: #F5EFE3;
+    --muted: #A89B85;
+  }
+
+  [data-theme="light"] {
+    --ink: #F5EFE3;
+    --surface: #FFFFFF;
+    --surface2: #E7DCC6;
+    --paper: #241A0C;
+    --muted: #6E5F45;
   }
 
   body {
-    @apply bg-ink text-paper font-body;
+    @apply bg-ink text-paper font-body transition-colors duration-200;
   }
 }
 
@@ -31,8 +46,40 @@
 
   .receipt-edge {
     height: 10px;
-    background-image: radial-gradient(circle at 8px 0, transparent 6px, #221709 7px);
+    background-image: radial-gradient(circle at 8px 0, transparent 6px, var(--surface, #221709) 7px);
     background-size: 16px 10px;
     background-repeat: repeat-x;
+  }
+
+  /* Default hero artwork (no merchant image configured and catalog empty):
+     layered dusk gradients + a faint geometric lattice — pure CSS, never 404s. */
+  .souk-hero-default {
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 110%, rgba(201, 150, 60, 0.28), transparent 60%),
+      repeating-linear-gradient(45deg, rgba(201, 150, 60, 0.07) 0 2px, transparent 2px 14px),
+      repeating-linear-gradient(-45deg, rgba(201, 150, 60, 0.07) 0 2px, transparent 2px 14px),
+      linear-gradient(180deg, var(--surface, #221709), var(--ink, #171008));
+  }
+
+  /* Sticky filter bar: chips scroll horizontally on small screens instead
+     of wrapping and shoving the grid down. */
+  .souk-chips-bar {
+    @apply sticky top-[68px] z-30 -mx-5 px-5 py-3 bg-ink border-b border-surface2 overflow-x-auto flex gap-2;
+    scrollbar-width: none;
+  }
+  .souk-chips-bar::-webkit-scrollbar {
+    display: none;
+  }
+  .souk-chips-bar .souk-chip {
+    @apply shrink-0;
+  }
+
+  /* Spotlight rail: thumb-swipe snap strip, one shared card shape. */
+  .souk-rail {
+    @apply flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory;
+    scrollbar-width: thin;
+  }
+  .souk-rail .souk-card {
+    @apply w-56 sm:w-64 shrink-0 snap-start;
   }
 }
