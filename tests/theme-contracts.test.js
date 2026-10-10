@@ -119,3 +119,13 @@ test("souk hero cascade + spotlight are generic (no client hardcodes)", () => {
   assert.ok(html.includes("souk-chips-bar"), "sticky chips bar present");
   assert.ok(js.includes("category"), "deep-linkable ?category= supported");
 });
+
+test("souk hero is image-left/text-right on desktop, stacked on mobile", () => {
+  const html = themeSrc("themes/souk/index.html");
+  const imgPos = html.indexOf('id="hero-image"');
+  const textPos = html.indexOf('id="hero-line1"');
+  assert.ok(imgPos !== -1 && textPos !== -1 && imgPos < textPos, "hero image must precede hero text in DOM");
+  assert.ok(html.includes("md:flex-row"), "side-by-side row from tablet/desktop up");
+  assert.ok(html.includes("flex-col"), "stacked column on mobile");
+  assert.ok(html.includes("aspect-[4/3]"), "hero image has a fixed aspect so it cannot overlap text");
+});
