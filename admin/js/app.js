@@ -718,7 +718,9 @@ function adminApp() {
     },
 
     async uploadProductPhoto(event, productId) {
-      const files = event.target.files;
+      // Snapshot synchronously: event.target.files is a LIVE list and the
+      // value reset below empties it — spreading later would see length 0.
+      const files = [...event.target.files];
       event.target.value = "";
       await this.uploadPhotoFiles(files, "product", productId);
     },
@@ -1166,7 +1168,8 @@ function adminApp() {
     },
 
     async uploadServicePhoto(event, serviceId) {
-      const files = event.target.files;
+      // Same live-list snapshot as uploadProductPhoto — see note there.
+      const files = [...event.target.files];
       event.target.value = "";
       await this.uploadPhotoFiles(files, "service", serviceId);
     },
@@ -1524,7 +1527,8 @@ function adminApp() {
     },
 
     async uploadListingPhoto(event, listingId) {
-      const files = event.target.files;
+      // Same live-list snapshot as uploadProductPhoto — see note there.
+      const files = [...event.target.files];
       event.target.value = "";
       await this.uploadPhotoFiles(files, "listing", listingId);
     },

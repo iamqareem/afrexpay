@@ -267,3 +267,34 @@ test("home tab collapses rarely-touched sections, shows upload progress", () => 
   assert.ok(css.includes(".home-details"), "collapsible styling missing");
   assert.ok(/stat-value[^}]*1\.15rem/.test(css), "stat values must use the reduced scale");
 });
+
+function liveFileInput(files) {
+  // Emulates the browser: input.files is a LIVE list — assigning value
+  // empties the previously returned array in place, exactly like Chrome.
+  const live = [...files];
+  return {
+    files: live,
+    _value: "fakepath",
+    set value(v) { this._value = v; live.length = 0; },
+    get value() { return this._value; },
+  };
+}
+
+for (const [handler, kind, id] of [
+  ["uploadProductPhoto", "product", "p1"],
+  ["uploadServicePhoto", "service", "s1"],
+  ["uploadListingPhoto", "listing", "l1"],
+]) {
+  test(`picker ${handler} snapshots files before resetting the input`, async () => {
+    const a = adminApp();
+    const file = Object.assign(new Blob(["x"], { type: "image/jpeg" }), { name: "a.jpg" });
+    const input = liveFileInput([file]);
+    let received = null;
+    a.uploadPhotoFiles = async (files, t, eid) => { received = [files, t, eid]; };
+    await a[handler]({ target: input }, id);
+    assert.strictEqual(received[0].length, 1, "live list was cleared before the snapshot");
+    assert.strictEqual(received[0][0], file);
+    assert.deepStrictEqual([received[1], received[2]], [kind, id]);
+    assert.strictEqual(input.value, "", "input must still reset so re-picking works");
+  });
+}
