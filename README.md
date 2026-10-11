@@ -34,6 +34,7 @@ afrexpay/
     soko/                   # mobile-first social marketplace theme
     booking-slots/           # service/booking storefront theme
     resort/                 # hotel & recreation booking theme
+    voyage/                 # car hire & tours booking theme
     listing-grid/             # real estate storefront theme
     new-listings/           # modern component-based listing theme
   admin/                   # merchant dashboard — one universal UI, no theme system needed

@@ -46,6 +46,7 @@ test("no theme trusts ?paid=1 for the paid banner", () => {
     "themes/yeezy/js/app.js",
     "themes/booking-slots/js/app.js",
     "themes/resort/js/app.js",
+    "themes/voyage/js/app.js",
     "themes/listing-grid/js/app.js",
   ];
   for (const f of files) {
@@ -128,4 +129,30 @@ test("souk hero is image-left/text-right on desktop, stacked on mobile", () => {
   assert.ok(html.includes("md:flex-row"), "side-by-side row from tablet/desktop up");
   assert.ok(html.includes("flex-col"), "stacked column on mobile");
   assert.ok(html.includes("aspect-[4/3]"), "hero image has a fixed aspect so it cannot overlap text");
+});
+
+test("voyage is hire-flavored booking-slots without client hardcodes", () => {
+  const js = themeSrc("themes/voyage/js/app.js");
+  const html = themeSrc("themes/voyage/index.html");
+  assert.ok(html.includes("Choose your hire"), "hire step copy");
+  assert.ok(html.includes("RESERVE VEHICLE"), "hire CTA");
+  assert.ok(js.includes("function formatDuration("), "duration formatter present");
+  assert.ok(!/funeral|party|wedding|tour/i.test(js + html), "no client event-type hardcodes");
+  const m = js.match(/function formatDuration\(minutes\) \{[\s\S]*?\n\}/);
+  assert.ok(m, "formatDuration extractable");
+  const formatDuration = eval(`(${m[0].replace("function formatDuration", "function ")})`);
+  assert.strictEqual(formatDuration(30), "30 min");
+  assert.strictEqual(formatDuration(60), "1 hr");
+  assert.strictEqual(formatDuration(480), "8 hr");
+  assert.strictEqual(formatDuration(90), "1.5 hr");
+  assert.strictEqual(formatDuration(2880), "2 days");
+  assert.strictEqual(formatDuration(0), "");
+});
+
+test("wizard selection states invert vividly with contrasting dots", () => {
+  const css = themeSrc("public/css/style.css");
+  assert.ok(css.includes(".category-radio-card.active{border-color:var(--black);background:var(--black);color:var(--white)"), "vertical cards invert on select");
+  assert.ok(css.includes(".category-radio-card.active .radio-dot{border-color:var(--white)}"), "dot contrasts the inverted card");
+  assert.ok(css.includes("translateY(-3px)"), "hover projection present");
+  assert.ok(css.includes(".category-radio-card:focus-within"), "keyboard focus mirrors hover");
 });

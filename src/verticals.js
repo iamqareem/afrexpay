@@ -69,6 +69,13 @@ const THEMES_REGISTRY = {
     subCategory: "Hotels & Recreation",
     description: "Premium search-first booking for hotel experiences — pool, spa, fitness.",
   },
+  voyage: {
+    id: "voyage",
+    label: "Voyage",
+    vertical: "services",
+    subCategory: "Car Hire & Tours",
+    description: "Vehicle hire for events and getaways — parties, funerals, tours and countryside rides.",
+  },
   "listing-grid": {
     id: "listing-grid",
     label: "Listing Grid",
@@ -94,7 +101,7 @@ const VERTICALS = {
   services: {
     label: "Bookable services",
     dashboardTabs: ["services", "availability", "bookings"],
-    compatibleThemes: ["booking-slots", "resort"],
+    compatibleThemes: ["booking-slots", "resort", "voyage"],
   },
   listings: {
     label: "Real estate listings",

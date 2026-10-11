@@ -216,12 +216,15 @@ a{color:inherit}
   border:1.5px solid var(--border);border-radius:16px;background:var(--white);
   padding:1.1rem 1.1rem;transition:border-color var(--fast) ease,background var(--fast) ease,transform var(--med) var(--ease),box-shadow var(--med) var(--ease);
 }
-.category-radio-card:hover{border-color:var(--gray-400);transform:translateY(-2px);box-shadow:var(--shadow-1)}
-.category-radio-card.active{border-color:var(--black);background:var(--gray-100);box-shadow:var(--shadow-1)}
+.category-radio-card:hover{border-color:var(--black);transform:translateY(-3px);box-shadow:var(--shadow-2)}
+.category-radio-card:focus-within{border-color:var(--black);box-shadow:var(--shadow-2)}
+.category-radio-card.active{border-color:var(--black);background:var(--black);color:var(--white);box-shadow:var(--shadow-2)}
+.category-radio-card.active .radio-body small{color:var(--gray-300)}
 .category-radio-card input{position:absolute;opacity:0;pointer-events:none}
 .radio-dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--gray-300);flex:none;margin-top:2px;position:relative;transition:border-color var(--fast) ease}
-.category-radio-card.active .radio-dot{border-color:var(--black)}
-.category-radio-card.active .radio-dot::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--black)}
+.category-radio-card:hover .radio-dot{border-color:var(--gray-500)}
+.category-radio-card.active .radio-dot{border-color:var(--white)}
+.category-radio-card.active .radio-dot::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--white)}
 .radio-body{display:flex;flex-direction:column;gap:.15rem}
 .radio-body strong{font-size:.98rem;letter-spacing:-0.01em}
 .radio-body small{color:var(--muted);font-size:.83rem}
@@ -239,7 +242,7 @@ a{color:inherit}
 .theme-grid .theme-wizard-card:nth-child(4){animation-delay:180ms}
 .theme-grid .theme-wizard-card:nth-child(5){animation-delay:240ms}
 @keyframes cardIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-.theme-wizard-card:hover{border-color:var(--gray-400);transform:translateY(-2px);box-shadow:var(--shadow-1)}
+.theme-wizard-card:hover{border-color:var(--black);transform:translateY(-3px);box-shadow:var(--shadow-2)}
 .theme-wizard-card.selected{border-color:var(--black);background:var(--ink);color:var(--white);box-shadow:var(--shadow-2)}
 .theme-wizard-card.selected .theme-wizard-badge{border-color:rgba(255,255,255,.35);color:var(--white)}
 .theme-wizard-card.selected .theme-wizard-desc{color:var(--gray-300)}
@@ -395,10 +398,15 @@ html[data-theme="dark"] .step-nav-item:not(.active):hover{border-color:var(--whi
 html[data-theme="dark"] .step-nav-item.active{background:var(--white);border-color:var(--white);color:var(--black)}
 html[data-theme="dark"] .step-nav-item.active .step-n{background:var(--black);color:var(--white);border-color:var(--black)}
 html[data-theme="dark"] .category-radio-card{background:var(--surface)}
-html[data-theme="dark"] .category-radio-card:hover{border-color:var(--gray-500)}
+html[data-theme="dark"] .category-radio-card:hover{border-color:var(--white);transform:translateY(-3px);box-shadow:var(--shadow-2)}
+html[data-theme="dark"] .category-radio-card:focus-within{border-color:var(--white);box-shadow:var(--shadow-2)}
 html[data-theme="dark"] .category-radio-card.active{background:var(--white);border-color:var(--white);color:var(--black)}
 html[data-theme="dark"] .category-radio-card.active .radio-body small{color:var(--gray-700)}
-/* Selected dot stays black (base rules) — clearly visible on the inverted white card */
+html[data-theme="dark"] .category-radio-card.active .radio-dot{border-color:var(--black)}
+html[data-theme="dark"] .category-radio-card.active .radio-dot::after{background:var(--black)}
+html[data-theme="dark"] .theme-wizard-card:hover{border-color:var(--white);transform:translateY(-3px);box-shadow:var(--shadow-2)}
+/* Inverted cards flip the dot with them: white on the black card (light
+   mode), black on the white card (dark mode) — contrast both ways. */
 html[data-theme="dark"] .theme-wizard-card.selected{border-color:var(--white);background:var(--white);color:var(--black)}
 html[data-theme="dark"] .theme-wizard-card.selected .theme-wizard-badge{border-color:rgba(0,0,0,.3);color:var(--black)}
 html[data-theme="dark"] .theme-wizard-card.selected .theme-wizard-desc{color:var(--gray-700)}

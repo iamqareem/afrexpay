@@ -45,6 +45,7 @@ test("getThemesForVertical returns the right sets", () => {
   assert.ok(ids("products").includes("hangtag"));
   assert.ok(ids("services").includes("booking-slots"));
   assert.ok(ids("services").includes("resort"));
+  assert.ok(ids("services").includes("voyage"));
   assert.ok(ids("listings").includes("listing-grid"));
   assert.deepEqual(ids("unknown-vertical"), ids("products"));
 });
@@ -72,4 +73,14 @@ test("wizard contract: every theme carries the fields signup.js renders", () => 
   for (const t of products) {
     assert.ok(t.id && t.label && t.subCategory && t.description, `theme ${t.id} has wizard copy`);
   }
+});
+
+test("voyage is a fully-wired services theme (car hire)", () => {
+  const services = getThemesForVertical("services");
+  const voyage = services.find((t) => t.id === "voyage");
+  assert.ok(voyage, "voyage in services");
+  assert.ok(voyage.label && voyage.subCategory && voyage.description, "voyage has wizard copy");
+  assert.equal(isThemeCompatible("services", "voyage"), true);
+  assert.equal(isThemeCompatible("products", "voyage"), false);
+  assert.equal(getThemeDetails("voyage").id, "voyage");
 });
