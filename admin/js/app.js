@@ -1,6 +1,14 @@
 // admin/js/app.js — one Alpine component holds all dashboard state.
 // No build step: this file is loaded as-is, same as alpine.min.js.
 
+// Upload guardrails, mirrored from src/modules/media/media.routes.js
+// (ALLOWED_TYPES + 2MB cap). Client-side preflight + compression exist so
+// a merchant never waits through a full upload for a guaranteed 400 —
+// phone photos are routinely 3–12MB and iPhones shoot HEIC by default.
+const UPLOAD_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
+const UPLOAD_MAX_DIM = 1600; // longest edge after downscale — plenty for storefront cards
+
 function adminApp() {
   return {
     // ---- top-level state ----
@@ -12,6 +20,7 @@ function adminApp() {
 
     // photo manager UI state (shared across product/service/listing)
     uploadingPhotos: false,
+    uploadProgress: "", // "Uploading 2 of 3…" — shown beside the spinner
     photoDragOver: false,
     dragPhoto: null, // { list, index } while a thumb is being dragged
     dropTarget: null, // { list, index } for the drop highlight
@@ -284,7 +293,12 @@ function adminApp() {
 
     scrollToId(id) {
       const el = document.getElementById(id);
-      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (!el) return;
+      // Settings subsections live inside collapsed <details> — open the
+      // ancestor first or the scroll lands on a hidden section.
+      const det = el.closest ? el.closest("details") : null;
+      if (det && !det.open) det.open = true;
+      if (el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
     },
 
     // Manual retry for the home error card: re-arm every skeleton and run
@@ -518,32 +532,113 @@ function adminApp() {
       return this.loadListingPhotos(entityId);
     },
 
+    // Turn a picked file into an upload-ready Blob: original when it
+    // already fits, recompressed otherwise. Returns { blob } or { error }
+    // so callers can toast instantly without attempting a doomed upload.
+    async preparePhoto(file) {
+      if (!UPLOAD_ALLOWED_TYPES.has(file.type)) {
+        const heic = file.type === "image/heic" || file.type === "image/heif";
+        return {
+          error: heic
+            ? `${file.name}: iPhone HEIC photos aren't supported — retake as JPEG or screenshot it first.`
+            : `${file.name}: only JPEG, PNG, or WebP photos are supported.`,
+        };
+      }
+      if (file.size <= UPLOAD_MAX_BYTES && file.type !== "image/png") {
+        return { blob: file };
+      }
+      // preparePhoto never throws — every failure path returns { error }
+      // so one bad file can't kill the whole batch loop in uploadPhotoFiles.
+      if (typeof createImageBitmap !== "function" || typeof document === "undefined") {
+        return { error: `${file.name}: this browser can't shrink photos — try a smaller file or a newer browser.` };
+      }
+      let source;
+      try {
+        source = await createImageBitmap(file, { imageOrientation: "from-image" });
+      } catch {
+        return { error: `${file.name}: could not read that image.` };
+      }
+      try {
+        const scale = Math.min(1, UPLOAD_MAX_DIM / Math.max(source.width, source.height));
+        const w = Math.max(1, Math.round(source.width * scale));
+        const h = Math.max(1, Math.round(source.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        // PNG keeps transparency; everything else gets a white base so
+        // translucent pixels don't render black in the JPEG fallback.
+        const keepPng = file.type === "image/png";
+        if (!keepPng) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, w, h);
+        }
+        ctx.drawImage(source, 0, 0, w, h);
+        const encode = (mime, quality) =>
+          new Promise((resolve) => canvas.toBlob(resolve, mime, quality));
+        let blob = await encode(file.type === "image/webp" ? "image/webp" : keepPng ? "image/png" : "image/jpeg", 0.82);
+        if (!blob) blob = await encode("image/jpeg", 0.82); // e.g. WebP encode unsupported
+        if (!blob) return { error: `${file.name}: could not process that image.` };
+        if (blob.size > UPLOAD_MAX_BYTES && keepPng) {
+          // Dense PNG that still doesn't fit — one JPEG flatten pass.
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(source, 0, 0, w, h);
+          blob = await encode("image/jpeg", 0.78);
+        }
+        if (!blob || blob.size > UPLOAD_MAX_BYTES) {
+          return { error: `${file.name}: still over 2MB after shrinking — try a smaller photo.` };
+        }
+        return { blob };
+      } catch {
+        return { error: `${file.name}: could not process that image.` };
+      } finally {
+        if (source && source.close) source.close();
+      }
+    },
+
     async uploadPhotoFiles(fileList, entityType, entityId) {
-      const files = [...(fileList || [])].filter((f) => f.type.startsWith("image/"));
-      if (files.length === 0) {
+      if (this.uploadingPhotos) {
+        this.showToast("Finish the current upload first.", "error");
+        return;
+      }
+      const picked = [...(fileList || [])];
+      if (picked.length === 0) {
         this.showToast("No image files found.", "error");
         return;
       }
       this.uploadingPhotos = true;
+      this.uploadProgress = "";
       let ok = 0;
-      for (const file of files) {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("entityType", entityType);
-        formData.append("entityId", entityId);
-        try {
-          const res = await fetch("/api/media", { method: "POST", credentials: "same-origin", body: formData });
-          if (res.ok) {
-            ok += 1;
-          } else {
-            const data = await res.json().catch(() => ({}));
-            this.showToast(data.error || `Upload failed: ${file.name}`, "error");
+      try {
+        for (let i = 0; i < picked.length; i += 1) {
+          const file = picked[i];
+          this.uploadProgress = picked.length > 1 ? `${i + 1} of ${picked.length}…` : "…";
+          const ready = await this.preparePhoto(file);
+          if (ready.error) {
+            this.showToast(ready.error, "error");
+            continue;
           }
-        } catch {
-          this.showToast(`Upload failed: ${file.name}`, "error");
+          const formData = new FormData();
+          formData.append("file", ready.blob, file.name);
+          formData.append("entityType", entityType);
+          formData.append("entityId", entityId);
+          try {
+            const res = await fetch("/api/media", { method: "POST", credentials: "same-origin", body: formData });
+            if (res.ok) {
+              ok += 1;
+            } else {
+              const data = await res.json().catch(() => ({}));
+              this.showToast(data.error || `Upload failed: ${file.name}`, "error");
+            }
+          } catch {
+            this.showToast(`Upload failed: ${file.name}`, "error");
+          }
         }
+      } finally {
+        this.uploadingPhotos = false;
+        this.uploadProgress = "";
       }
-      this.uploadingPhotos = false;
       if (ok > 0) {
         this.showToast(ok === 1 ? "Photo uploaded." : `${ok} photos uploaded.`);
         await this.reloadPhotoList(entityType, entityId);

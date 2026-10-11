@@ -171,7 +171,7 @@
               <h3>Share your store</h3>
               <p class="muted" style="margin-top:-0.5rem">Customers scan the code to open your storefront.</p>
               <div x-show="loading.qr && !storeQr.svg">
-                <span class="skel" style="width:132px;height:132px;display:block"></span>
+                <span class="skel" style="width:104px;height:104px;display:block"></span>
               </div>
               <div x-show="storeQr.svg" class="qr-layout">
                 <div class="qr-frame" x-html="storeQr.svg" role="img" aria-label="Store QR code"></div>
@@ -359,7 +359,8 @@
             </div>
             <button class="btn" @click="saveConfig" :disabled="configSaving" x-text="configSaving ? 'Saving...' : 'Save settings'"></button>
           </div>
-            <h3 id="store-discovery">Search & discovery</h3>
+          <details class="home-details" id="store-discovery">
+            <summary>Search & discovery</summary>
           <div class="card">
             <div class="field"><label for="config-seoTitle">Search title</label><input id="config-seoTitle" x-model="config.seoTitle" placeholder="Defaults to your store name + tagline" /></div>
             <div class="field"><label for="config-seoDescription">Search description</label><textarea id="config-seoDescription" rows="2" x-model="config.seoDescription" placeholder="Defaults to your tagline"></textarea></div>
@@ -382,7 +383,9 @@
             </div>
             <button class="btn" @click="saveConfig" :disabled="configSaving" x-text="configSaving ? 'Saving...' : 'Save settings'"></button>
           </div>
-            <h3 id="store-payments">Payments</h3>
+          </details>
+          <details class="home-details" id="store-payments">
+            <summary>Payments</summary>
           <div class="card">
             <h3 style="margin-top:0;">Stripe</h3>
             <p class="hint" style="margin-top:0;">Paste your Stripe API keys here. Get them from your Stripe Dashboard → Developers → API keys.</p>
@@ -435,7 +438,9 @@
               <span class="badge" :class="paypalStatus.enabled ? 'confirmed' : 'pending'" x-text="paypalStatus.enabled ? 'Enabled' : 'Not enabled'"></span>
             </div>
           </div>
-            <h3 id="store-domain">Custom domain</h3>
+          </details>
+          <details class="home-details" id="store-domain">
+            <summary>Custom domain</summary>
           <div class="card">
             <h3 style="margin-top:0;">Custom Domain</h3>
             <p class="hint" style="margin-top:0;">
@@ -473,7 +478,7 @@
               <div class="dns-record-row" style="margin-top:0.4rem;">
                 <span>A</span>
                 <span>@</span>
-                <span>→ your server IP (match your afrexpay.com A record)</span>
+                <span>→ your server IP (match your afrexpay.app A record)</span>
               </div>
               <p class="hint" style="margin-top:0.75rem; margin-bottom:0;">
                 DNS changes can take up to 48 hours to propagate, though usually live within minutes.
@@ -511,10 +516,11 @@
                 ✓ Domain verified — your storefront is live at
                 <a :href="'https://' + domainStatus.custom_domain" target="_blank" rel="noopener"
                    x-text="domainStatus.custom_domain"></a>.
-                TLS is issued automatically on first visit via Caddy.
-              </p>
+                 TLS is issued automatically on first visit via Caddy.
+                </p>
             </template>
           </div>
+          </details>
           </div>
         </div>
 
@@ -656,7 +662,7 @@
                 <span>JPG, PNG or WebP, up to 2MB each — first photo is the cover</span>
               </label>
             </div>
-            <p class="photo-uploading" x-show="uploadingPhotos"><span class="spinner" aria-hidden="true"></span>Uploading…</p>
+            <p class="photo-uploading" x-show="uploadingPhotos"><span class="spinner" aria-hidden="true"></span>Uploading<span x-text="uploadProgress"></span></p>
             <div class="photo-grid">
               <template x-for="(photo, idx) in productPhotos" :key="photo.id">
                 <div class="photo-thumb"
@@ -807,7 +813,7 @@
                 <span>JPG, PNG or WebP, up to 2MB each — first photo is the cover</span>
               </label>
             </div>
-            <p class="photo-uploading" x-show="uploadingPhotos"><span class="spinner" aria-hidden="true"></span>Uploading…</p>
+            <p class="photo-uploading" x-show="uploadingPhotos"><span class="spinner" aria-hidden="true"></span>Uploading<span x-text="uploadProgress"></span></p>
             <div class="photo-grid">
               <template x-for="(photo, idx) in servicePhotos" :key="photo.id">
                 <div class="photo-thumb"
@@ -1059,7 +1065,7 @@
                 <span>JPG, PNG or WebP, up to 2MB each — first photo is the cover</span>
               </label>
             </div>
-            <p class="photo-uploading" x-show="uploadingPhotos"><span class="spinner" aria-hidden="true"></span>Uploading…</p>
+            <p class="photo-uploading" x-show="uploadingPhotos"><span class="spinner" aria-hidden="true"></span>Uploading<span x-text="uploadProgress"></span></p>
             <div class="photo-grid">
               <template x-for="(photo, idx) in listingPhotos" :key="photo.id">
                 <div class="photo-thumb"

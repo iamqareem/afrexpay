@@ -179,3 +179,91 @@ test("POS category filter and line-size merge", () => {
   assert.strictEqual(a.posCart[0].qty, 2);
   assert.deepStrictEqual(a.posCart[0].sizes, ["S", "M"]);
 });
+
+test("preparePhoto rejects hostile types instantly, before any upload", async () => {
+  const a = adminApp();
+  const heic = await a.preparePhoto({ name: "img.heic", type: "image/heic", size: 5_000_000 });
+  assert.ok(heic.error.includes("HEIC"), `got: ${heic.error}`);
+  const pdf = await a.preparePhoto({ name: "doc.pdf", type: "application/pdf", size: 100 });
+  assert.ok(pdf.error.includes("JPEG, PNG, or WebP"), `got: ${pdf.error}`);
+});
+
+test("preparePhoto passes fitting JPEGs through untouched", async () => {
+  const a = adminApp();
+  const file = Object.assign(new Blob(["x"], { type: "image/jpeg" }), { name: "a.jpg" });
+  const out = await a.preparePhoto(file);
+  assert.strictEqual(out.blob, file);
+  assert.strictEqual(out.error, undefined);
+});
+
+test("preparePhoto fails clean (never throws) when the browser cannot shrink", async () => {
+  const a = adminApp();
+  // Node has no createImageBitmap — same path as an ancient browser.
+  const big = Object.assign(new Blob(["x"], { type: "image/jpeg" }), { name: "big.jpg" });
+  Object.defineProperty(big, "size", { value: 5_000_000 });
+  const out = await a.preparePhoto(big);
+  assert.ok(out.error.includes("smaller file"), `got: ${out.error}`);
+});
+
+test("uploadPhotoFiles refuses overlap and empty picks without fetching", async () => {
+  const a = adminApp();
+  const origFetch = global.fetch;
+  let fetched = false;
+  global.fetch = async () => { fetched = true; return { ok: true }; };
+  try {
+    a.uploadingPhotos = true;
+    await a.uploadPhotoFiles([Object.assign(new Blob(["x"], { type: "image/jpeg" }), { name: "a.jpg" })], "product", "p1");
+    assert.strictEqual(a.toast.kind, "error");
+    assert.strictEqual(fetched, false);
+    a.uploadingPhotos = false;
+    await a.uploadPhotoFiles([], "product", "p1");
+    assert.ok(a.toast.message.includes("No image"));
+    assert.strictEqual(fetched, false);
+  } finally {
+    global.fetch = origFetch;
+  }
+});
+
+test("uploadPhotoFiles preflights, sends prepared blobs, clears progress", async () => {
+  const a = adminApp();
+  const sent = [];
+  const origFetch = global.fetch;
+  global.fetch = async (url, opts) => { sent.push(url); return { ok: true }; };
+  let reloaded = null;
+  a.reloadPhotoList = async (t, id) => { reloaded = [t, id]; };
+  try {
+    await a.uploadPhotoFiles(
+      [
+        Object.assign(new Blob(["x"], { type: "image/jpeg" }), { name: "a.jpg" }),
+        { name: "b.pdf", type: "application/pdf", size: 100 },
+      ],
+      "service", "svc-1"
+    );
+    assert.strictEqual(sent.length, 1, "rejected file must never be sent");
+    assert.strictEqual(sent[0], "/api/media");
+    assert.deepStrictEqual(reloaded, ["service", "svc-1"]);
+    assert.strictEqual(a.uploadingPhotos, false);
+    assert.strictEqual(a.uploadProgress, "");
+    assert.ok(a.toast.message.includes("Photo uploaded"));
+  } finally {
+    global.fetch = origFetch;
+  }
+});
+
+test("home tab collapses rarely-touched sections, shows upload progress", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const html = fs.readFileSync(path.join(__dirname, "..", "admin", "index.html"), "utf8");
+  const details = html.match(/<details class="home-details"/g) || [];
+  assert.strictEqual(details.length, 3, `expected 3 collapsible sections, found ${details.length}`);
+  for (const id of ["store-discovery", "store-payments", "store-domain"]) {
+    assert.ok(html.includes(`id="${id}"`), `${id} anchor missing`);
+  }
+  const progress = html.match(/x-text="uploadProgress"/g) || [];
+  assert.strictEqual(progress.length, 3, "each photo manager needs a progress readout");
+  const js = fs.readFileSync(path.join(__dirname, "..", "admin", "js", "app.js"), "utf8");
+  assert.ok(js.includes('closest("details")'), "scrollToId must open collapsed sections");
+  const css = fs.readFileSync(path.join(__dirname, "..", "admin", "css", "style.css"), "utf8");
+  assert.ok(css.includes(".home-details"), "collapsible styling missing");
+  assert.ok(/stat-value[^}]*1\.15rem/.test(css), "stat values must use the reduced scale");
+});

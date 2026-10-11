@@ -210,21 +210,52 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; margin: 0; }
   box-shadow: var(--shadow-1);
 }
 .card + .card { margin-top: 1.25rem; }
-.card h3 { margin-bottom: 1rem; font-size: 1.05rem; }
+.card h3 { margin-bottom: 0.75rem; font-size: 0.95rem; }
+
+/* Standalone section headings on the home tab (Store settings, …) —
+   one step below card titles so the page reads as sections, not shouting. */
+#store-settings, #store-discovery, #store-payments, #store-domain {
+  font-size: 1rem;
+  margin: 1.5rem 0 0.75rem;
+}
+
+/* Collapsible home sections (Payments, Custom domain, Discovery):
+   native <details>, no JS — save buttons and bindings inside work untouched. */
+.home-details { margin-top: 1.5rem; }
+.home-details > summary {
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+  padding: 0.25rem 0;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.home-details > summary::-webkit-details-marker { display: none; }
+.home-details > summary::before {
+  content: "+";
+  font-family: ui-monospace, monospace;
+  color: var(--accent);
+  font-weight: 700;
+}
+.home-details[open] > summary::before { content: "–"; }
+.home-details .card { margin-top: 0.75rem; }
 
 /* ---- home overview ---- */
 /* ---- share-your-store QR card ---- */
 .qr-layout {
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
-  gap: 1.25rem;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 1rem;
   align-items: center;
   margin-top: 0.25rem;
 }
 .qr-frame {
-  width: 132px;
-  height: 132px;
-  padding: 8px;
+  width: 104px;
+  height: 104px;
+  padding: 6px;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -262,18 +293,18 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; margin: 0; }
 }
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.9rem;
-  margin-bottom: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 0.7rem;
+  margin-bottom: 1rem;
 }
 .stat-card {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 1rem 1.1rem;
+  padding: 0.75rem 0.85rem;
   box-shadow: var(--shadow-1);
 }
-.stat-card .stat-value { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+.stat-card .stat-value { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
 .stat-card .stat-label {
   color: var(--muted);
   font-size: 0.75rem;
