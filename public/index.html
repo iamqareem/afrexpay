@@ -336,6 +336,17 @@
       } else {
         document.querySelectorAll('[data-reveal]').forEach(function (el) { el.classList.add('is-visible'); });
       }
+      // Verticals spotlight: click pins the light on a card (hover only
+      // previews). Middle card holds .spotlight by default in the markup.
+      var spotGrid = document.querySelector('#verticals .spotlight-grid');
+      if (spotGrid) {
+        spotGrid.addEventListener('click', function (e) {
+          var card = e.target && e.target.closest ? e.target.closest('.card') : null;
+          if (!card || !spotGrid.contains(card)) return;
+          spotGrid.querySelectorAll('.card.spotlight').forEach(function (c) { c.classList.remove('spotlight'); });
+          card.classList.add('spotlight');
+        });
+      }
       // Pre-fill wizard subdomain from hero field on CTA click
       document.querySelectorAll('a[href="#signup-wizard"]').forEach(function (a) {
         a.addEventListener('click', function () {

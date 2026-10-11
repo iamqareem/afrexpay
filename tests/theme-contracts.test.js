@@ -177,3 +177,21 @@ test("wizard theme grid freezes entrance animation after first paint", () => {
   assert.ok(js.includes('"voyage"') || js.includes("'voyage'") || js.includes("voyage"), "fallback lists include voyage");
   assert.ok(js.includes("soko"), "fallback lists include soko");
 });
+
+test("wizard dark theme cards borrow the trade surface; only selected goes white", () => {
+  const css = themeSrc("public/css/style.css");
+  assert.ok(css.includes('html[data-theme="dark"] .theme-wizard-card{background:var(--surface);color:var(--text)}'), "unselected theme cards use the dark surface");
+  assert.ok(!/html\[data-theme="dark"\] \.theme-wizard-card\{[^}]*background:var\(--white\)/.test(css), "no blanket white theme cards in dark mode");
+  assert.ok(css.includes('html[data-theme="dark"] .theme-wizard-card.selected{border-color:var(--white);background:var(--white)'), "selected still goes white");
+});
+
+test("verticals spotlight fits exactly three, never scrolls, pins on click", () => {
+  const css = themeSrc("public/css/style.css");
+  const html = themeSrc("public/index.html");
+  assert.ok(css.includes("#verticals .spotlight-grid{grid-template-columns:1fr}"), "stacked base");
+  assert.ok(css.includes("#verticals .spotlight-grid{grid-template-columns:repeat(3,1fr)}"), "exact three-fit on desktop");
+  const verticalsCss = css.slice(css.indexOf("#verticals .spotlight-grid"));
+  assert.ok(!/overflow-x\s*:\s*auto|scroll-snap/.test(verticalsCss.slice(0, 1200)), "no scroll-strip mechanics");
+  assert.ok(html.includes("spotGrid.addEventListener('click'"), "click-pin listener present");
+  assert.ok(html.includes('<article class="card spotlight"'), "middle card holds default spotlight");
+});

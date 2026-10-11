@@ -354,9 +354,14 @@ html[data-theme="dark"] .theme-toggle .icon-sun{display:block}
 html[data-theme="dark"] .theme-toggle .icon-moon{display:none}
 
 /* Category spotlight — one card in focus at a time.
-   Middle card holds .spotlight by default; hovering the grid
-   moves the light to the hovered card, purely in CSS. */
-#verticals .spotlight-grid .card{transition:opacity var(--med) var(--ease),transform var(--med) var(--ease),box-shadow var(--med) var(--ease),border-color var(--fast) ease}
+   Exactly three across on desktop (never a scroll strip), stacked below.
+   Middle card holds .spotlight by default; hovering previews the light,
+   clicking pins it — purely class moves, no layout shift. */
+#verticals .spotlight-grid{grid-template-columns:1fr}
+@media (min-width:960px){
+  #verticals .spotlight-grid{grid-template-columns:repeat(3,1fr)}
+}
+#verticals .spotlight-grid .card{cursor:pointer;transition:opacity var(--med) var(--ease),transform var(--med) var(--ease),box-shadow var(--med) var(--ease),border-color var(--fast) ease}
 #verticals .spotlight-grid .card.spotlight{
   opacity:1;transform:translateY(-6px);
   border-color:var(--border-strong);box-shadow:var(--shadow-3);
@@ -418,6 +423,11 @@ html[data-theme="dark"] .category-radio-card.active .radio-dot::after{background
 html[data-theme="dark"] .theme-wizard-card:hover{border-color:var(--white);transform:translateY(-3px);box-shadow:var(--shadow-2)}
 /* Inverted cards flip the dot with them: white on the black card (light
    mode), black on the white card (dark mode) — contrast both ways. */
+/* Unselected theme cards borrow the trade-card surface in dark mode —
+   only the selected one goes white. Base (light) rules already invert. */
+html[data-theme="dark"] .theme-wizard-card{background:var(--surface);color:var(--text)}
+html[data-theme="dark"] .theme-wizard-badge{border-color:var(--border-strong);color:var(--muted)}
+html[data-theme="dark"] .theme-wizard-desc{color:var(--muted)}
 html[data-theme="dark"] .theme-wizard-card.selected{border-color:var(--white);background:var(--white);color:var(--black)}
 html[data-theme="dark"] .theme-wizard-card.selected .theme-wizard-badge{border-color:rgba(0,0,0,.3);color:var(--black)}
 html[data-theme="dark"] .theme-wizard-card.selected .theme-wizard-desc{color:var(--gray-700)}
