@@ -233,10 +233,13 @@ a{color:inherit}
 .theme-grid{display:grid;gap:.9rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));min-height:120px}
 .theme-wizard-card{
   border:1.5px solid var(--border);border-radius:16px;background:var(--white);
-  padding:1.1rem;cursor:pointer;display:flex;flex-direction:column;gap:.45rem;
+  padding:1.1rem 2.6rem 1.1rem 1.1rem;cursor:pointer;display:flex;flex-direction:column;gap:.45rem;position:relative;
   transition:border-color var(--fast) ease,background var(--fast) ease,transform var(--med) var(--ease),box-shadow var(--med) var(--ease);
   animation:cardIn var(--med) var(--ease) backwards;
 }
+/* Re-renders on every selection must not replay the entrance — the grid
+   gets .no-anim after its first paint (see renderThemeWizardGrid). */
+.theme-grid.no-anim .theme-wizard-card{animation:none}
 .theme-grid .theme-wizard-card:nth-child(2){animation-delay:60ms}
 .theme-grid .theme-wizard-card:nth-child(3){animation-delay:120ms}
 .theme-grid .theme-wizard-card:nth-child(4){animation-delay:180ms}
@@ -246,6 +249,14 @@ a{color:inherit}
 .theme-wizard-card.selected{border-color:var(--black);background:var(--ink);color:var(--white);box-shadow:var(--shadow-2)}
 .theme-wizard-card.selected .theme-wizard-badge{border-color:rgba(255,255,255,.35);color:var(--white)}
 .theme-wizard-card.selected .theme-wizard-desc{color:var(--gray-300)}
+/* Explicit picked-marker: inversion alone reads as "a dark card" at a
+   glance — the check says "this one is yours". Flips with the card. */
+.theme-wizard-card.selected::after{
+  content:"✓";position:absolute;top:.7rem;right:.7rem;width:1.5rem;height:1.5rem;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:800;
+  background:var(--white);color:var(--black);
+}
+html[data-theme="dark"] .theme-wizard-card.selected::after{background:var(--black);color:var(--white)}
 .theme-wizard-title{font-weight:750;letter-spacing:-0.01em}
 .theme-wizard-badge{
   align-self:flex-start;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;

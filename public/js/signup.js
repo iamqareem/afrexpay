@@ -8,10 +8,12 @@ const THEMES_BY_VERTICAL = {
     { id: "backmarket", label: "BackMarket", subCategory: "Refurbished Goods", desc: "Trust-centric layout for pre-owned & certified items." },
     { id: "automobile", label: "Automobile", subCategory: "Auto & Parts", desc: "Structured catalog for vehicle parts & motors." },
     { id: "souk", label: "Souk", subCategory: "Fragrance & Attire", desc: "Elegant storefront for perfumes, attars, and modest wear." },
+    { id: "soko", label: "Soko", subCategory: "Mobile Marketplace", desc: "Mobile-first social marketplace — snap feed, bag, and order tracking." },
   ],
   services: [
     { id: "booking-slots", label: "Booking Slots", subCategory: "Appointments", desc: "Interactive appointment scheduling with weekly availability." },
     { id: "resort", label: "Resort", subCategory: "Hotels & Recreation", desc: "Premium search-first booking for hotel experiences — pool, spa, fitness." },
+    { id: "voyage", label: "Voyage", subCategory: "Car Hire & Tours", desc: "Vehicle hire for events and getaways — parties, funerals, tours and countryside rides." },
   ],
   listings: [
     { id: "listing-grid", label: "Listing Grid", subCategory: "Real Estate", desc: "Property grid & inquiry forms for sales & rentals." },
@@ -45,11 +47,21 @@ async function fetchServerThemes(vertical) {
   }
 }
 
+let themeGridAnimated = false;
+let themeGridVertical = null;
+
 function renderThemeWizardGrid() {
   const vertical = getSelectedVertical();
   const themes = serverThemes[vertical] || THEMES_BY_VERTICAL[vertical] || THEMES_BY_VERTICAL.products;
   const grid = document.getElementById("theme-wizard-grid");
   const labelEl = document.getElementById("selected-vertical-label");
+  // A new vertical means a new card set — replay the stagger once, then
+  // freeze it again so selection clicks stay perfectly still.
+  if (themeGridVertical !== vertical) {
+    themeGridVertical = vertical;
+    themeGridAnimated = false;
+    grid.classList.remove("no-anim");
+  }
 
   const verticalLabels = {
     products: "Physical Products",
@@ -73,6 +85,12 @@ function renderThemeWizardGrid() {
   `
     )
     .join("");
+  // Entrance stagger plays once: re-rendering on every click used to replay
+  // it on all cards, so the grid visibly "bumped" with each selection.
+  if (themeGridAnimated) {
+    grid.classList.add("no-anim");
+  }
+  themeGridAnimated = true;
 }
 
 function selectThemeInWizard(themeSlug) {

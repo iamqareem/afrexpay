@@ -156,3 +156,24 @@ test("wizard selection states invert vividly with contrasting dots", () => {
   assert.ok(css.includes("translateY(-3px)"), "hover projection present");
   assert.ok(css.includes(".category-radio-card:focus-within"), "keyboard focus mirrors hover");
 });
+
+test("souk collection search filters name/blurb/category", () => {
+  const js = themeSrc("themes/souk/js/app.js");
+  const html = themeSrc("themes/souk/index.html");
+  assert.ok(html.includes('id="product-search"'), "search input present");
+  assert.ok(html.includes('id="product-search-clear"'), "search clear present");
+  assert.ok(js.includes("function setSearch("), "setSearch defined");
+  assert.ok(js.includes("state.search"), "search state present");
+  assert.ok(js.includes("includes(q)"), "substring match present");
+});
+
+test("wizard theme grid freezes entrance animation after first paint", () => {
+  const js = themeSrc("public/js/signup.js");
+  const css = themeSrc("public/css/style.css");
+  assert.ok(js.includes("themeGridAnimated"), "first-paint flag present");
+  assert.ok(js.includes('grid.classList.add("no-anim")'), "re-renders freeze animation");
+  assert.ok(css.includes(".theme-grid.no-anim .theme-wizard-card{animation:none}"), "freeze rule present");
+  assert.ok(css.includes('.theme-wizard-card.selected::after'), "selected check badge present");
+  assert.ok(js.includes('"voyage"') || js.includes("'voyage'") || js.includes("voyage"), "fallback lists include voyage");
+  assert.ok(js.includes("soko"), "fallback lists include soko");
+});

@@ -13,6 +13,7 @@ const state = {
   cart: [], // { productId, name, size, qty, priceMinor }
   lastOrderId: null, // the just-placed order — used by the pay-now button
   activeCategory: "All",
+  search: "",
 };
 
 function initTheme() {
@@ -84,8 +85,19 @@ function categoryCounts() {
 }
 
 function visibleProducts() {
-  if (state.activeCategory === "All") return state.products;
-  return state.products.filter((p) => categoryOf(p) === state.activeCategory);
+  const q = state.search.trim().toLowerCase();
+  return state.products.filter((p) => {
+    if (state.activeCategory !== "All" && categoryOf(p) !== state.activeCategory) return false;
+    if (!q) return true;
+    return [p.name, p.blurb, p.category].some((v) => String(v || "").toLowerCase().includes(q));
+  });
+}
+
+function setSearch(q) {
+  state.search = q;
+  const clear = document.getElementById("product-search-clear");
+  if (clear) clear.classList.toggle("hidden", q.trim().length === 0);
+  renderProducts();
 }
 
 function setCategory(cat, { scroll = false } = {}) {
@@ -228,7 +240,10 @@ function renderProducts() {
   document.getElementById("product-count").textContent = `${items.length} PIECE${items.length === 1 ? "" : "S"}`;
 
   if (items.length === 0) {
-    grid.innerHTML = `<p class="text-muted text-center py-10 col-span-full">Nothing here yet — check back soon.</p>`;
+    const filtering = state.search.trim() !== "" || state.activeCategory !== "All";
+    grid.innerHTML = filtering
+      ? `<p class="text-muted text-center py-10 col-span-full">Nothing matches — try another search or category.</p>`
+      : `<p class="text-muted text-center py-10 col-span-full">Nothing here yet — check back soon.</p>`;
     return;
   }
 
@@ -429,7 +444,18 @@ async function init() {
   renderCart();
 
   document.getElementById("cart-open").addEventListener("click", openCart);
-  document.getElementById("cart-close").addEventListener("click", closeCart);
+  const searchInput = document.getElementById("product-search");
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => setSearch(e.target.value));
+  }
+  const searchClear = document.getElementById("product-search-clear");
+  if (searchClear) {
+    searchClear.addEventListener("click", () => {
+      if (searchInput) searchInput.value = "";
+      setSearch("");
+      if (searchInput) searchInput.focus();
+    });
+  }  document.getElementById("cart-close").addEventListener("click", closeCart);
   document.getElementById("cart-overlay").addEventListener("click", closeCart);
   document.getElementById("checkout-open").addEventListener("click", openCheckout);
   document.getElementById("checkout-close").addEventListener("click", closeCheckout);

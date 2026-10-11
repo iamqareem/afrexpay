@@ -50,6 +50,12 @@
       <h2 class="font-display text-2xl tracking-tightest text-paper">THE COLLECTION</h2>
       <p id="product-count" class="font-mono text-xs text-muted"></p>
     </div>
+    <div class="relative mb-4">
+      <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="product-search" type="search" placeholder="Search the collection…" aria-label="Search products" autocomplete="off"
+        class="w-full bg-surface border border-surface2 rounded-full pl-10 pr-10 py-2.5 text-sm text-paper placeholder:text-muted focus:outline-none focus:border-gold" />
+      <button id="product-search-clear" type="button" aria-label="Clear search" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-paper text-lg leading-none">&times;</button>
+    </div>
     <div id="category-chips" class="souk-chips-bar mb-8"></div>
     <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
   </section>
